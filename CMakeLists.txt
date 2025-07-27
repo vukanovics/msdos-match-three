@@ -17,4 +17,7 @@ set (CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 set (CMAKE_C_FLAGS -I${CMAKE_CURRENT_LIST_DIR}/djgpp/i586-pc-msdosdjgpp/sys-include/)
 set (CMAKE_CXX_FLAGS -I${CMAKE_CURRENT_LIST_DIR}/djgpp/i586-pc-msdosdjgpp/sys-include/)
 
+set (CMAKE_EXPORT_COMPILE_COMMANDS true)
+
 add_subdirectory(src)
+add_subdirectory(tests)
