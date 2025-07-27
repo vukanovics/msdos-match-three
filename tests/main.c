@@ -15,9 +15,13 @@ char *failed() {
 
 int main(int argc, char **argv) {
   printf("Running VGA tests:\n");
+
   printf("crtc_set_get_mono: %s\n", crtc_set_get_mono() ? success() : failed());
   printf("crtc_set_get_color: %s\n",
          crtc_set_get_color() ? success() : failed());
+
+  printf("ac_set_get_mono: %s\n", ac_set_get_mono() ? success() : failed());
+  printf("ac_set_get_color: %s\n", ac_set_get_color() ? success() : failed());
   if (any_failed != 0) {
     printf("###############################################################\n");
     printf("######################SOME TESTS FAILED!#######################\n");

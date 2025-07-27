@@ -4,4 +4,7 @@
 int crtc_set_get_mono();
 int crtc_set_get_color();
 
+int ac_set_get_mono();
+int ac_set_get_color();
+
 #endif
