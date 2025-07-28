@@ -3,6 +3,7 @@
 int crtc_set_get_mono() {
   misc_output_register misc_output = get_misc_output();
   misc_output.io_address_select = false;
+  set_misc_output(misc_output);
   uint8_t prev = get_crtc(CRTC_START_ADDRESS_HIGH);
   set_crtc(CRTC_START_ADDRESS_HIGH, 0x05);
   uint8_t address_high = get_crtc(CRTC_START_ADDRESS_HIGH);
@@ -13,6 +14,7 @@ int crtc_set_get_mono() {
 int crtc_set_get_color() {
   misc_output_register misc_output = get_misc_output();
   misc_output.io_address_select = true;
+  set_misc_output(misc_output);
   uint8_t prev = get_crtc(CRTC_START_ADDRESS_HIGH);
   set_crtc(CRTC_START_ADDRESS_HIGH, 0x10);
   uint8_t address_high = get_crtc(CRTC_START_ADDRESS_HIGH);
@@ -23,6 +25,7 @@ int crtc_set_get_color() {
 int ac_set_get_mono() {
   misc_output_register misc_output = get_misc_output();
   misc_output.io_address_select = false;
+  set_misc_output(misc_output);
   uint8_t prev = get_ac(AC_HORIZONTAL_PEL_PANNING) & 0b00001111;
   set_ac(AC_HORIZONTAL_PEL_PANNING, 0x05);
   uint8_t horizontal_pel_panning =
@@ -34,6 +37,7 @@ int ac_set_get_mono() {
 int ac_set_get_color() {
   misc_output_register misc_output = get_misc_output();
   misc_output.io_address_select = true;
+  set_misc_output(misc_output);
   uint8_t prev = get_ac(AC_HORIZONTAL_PEL_PANNING) & 0b00001111;
   set_ac(AC_HORIZONTAL_PEL_PANNING, 0x06);
   uint8_t horizontal_pel_panning =
