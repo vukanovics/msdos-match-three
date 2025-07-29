@@ -22,6 +22,11 @@ int main(int argc, char **argv) {
 
   printf("ac_set_get_mono: %s\n", ac_set_get_mono() ? success() : failed());
   printf("ac_set_get_color: %s\n", ac_set_get_color() ? success() : failed());
+
+  printf("sc_set_get: %s\n", sc_set_get() ? success() : failed());
+
+  printf("gc_set_get: %s\n", gc_set_get() ? success() : failed());
+
   if (any_failed != 0) {
     printf("###############################################################\n");
     printf("######################SOME TESTS FAILED!#######################\n");

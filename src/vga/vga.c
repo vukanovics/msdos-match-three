@@ -77,3 +77,23 @@ misc_output_register get_misc_output() {
 
   return out;
 }
+
+void set_sc(sc_register_index index, uint8_t data) {
+  outportb(SC_INDEX_WRITE, index.d);
+  outportb(SC_DATA_WRITE, data);
+}
+
+uint8_t get_sc(sc_register_index index) {
+  outportb(SC_INDEX_WRITE, index.d);
+  return inportb(SC_DATA_READ);
+}
+
+void set_gc(gc_register_index index, uint8_t data) {
+  outportb(GC_INDEX_WRITE, index.d);
+  outportb(GC_DATA_WRITE, data);
+}
+
+uint8_t get_gc(gc_register_index index) {
+  outportb(GC_INDEX_WRITE, index.d);
+  return inportb(GC_DATA_READ);
+}

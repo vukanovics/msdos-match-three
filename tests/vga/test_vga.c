@@ -45,3 +45,19 @@ int ac_set_get_color() {
   set_ac(AC_HORIZONTAL_PEL_PANNING, prev);
   return horizontal_pel_panning == 0x06;
 }
+
+int sc_set_get() {
+  uint8_t prev = get_sc(SC_MAP_MASK);
+  set_sc(SC_MAP_MASK, 0x06);
+  uint8_t horizontal_pel_panning = get_sc(SC_MAP_MASK);
+  set_sc(SC_MAP_MASK, prev);
+  return horizontal_pel_panning == 0x06;
+}
+
+int gc_set_get() {
+  uint8_t prev = get_gc(GC_MISC);
+  set_gc(GC_MISC, 0x08);
+  uint8_t horizontal_pel_panning = get_gc(GC_MISC);
+  set_gc(GC_MISC, prev);
+  return horizontal_pel_panning == 0x08;
+}

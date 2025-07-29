@@ -78,17 +78,37 @@ void set_ac(ac_register_index index, uint8_t data);
 
 uint8_t get_ac(ac_register_index index);
 
+static const size_t SC_INDEX_READ = 0x03c4;
+static const size_t SC_INDEX_WRITE = 0x03c4;
+
+static const size_t SC_DATA_READ = 0x03c5;
+static const size_t SC_DATA_WRITE = 0x03c5;
+
 typedef struct {
   size_t d;
 } sc_register_index;
+
+// clang-format off
+static const sc_register_index SC_MAP_MASK = {0x02};
+// clang-format on
 
 void set_sc(sc_register_index index, uint8_t data);
 
 uint8_t get_sc(sc_register_index index);
 
+static const size_t GC_INDEX_READ = 0x03ce;
+static const size_t GC_INDEX_WRITE = 0x03ce;
+
+static const size_t GC_DATA_READ = 0x03cf;
+static const size_t GC_DATA_WRITE = 0x03cf;
+
 typedef struct {
   size_t d;
 } gc_register_index;
+
+// clang-format off
+static const gc_register_index GC_MISC = {0x06};
+// clang-format on
 
 void set_gc(gc_register_index index, uint8_t data);
 
