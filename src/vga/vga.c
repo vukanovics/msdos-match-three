@@ -2,6 +2,8 @@
 
 #include <pc.h>
 
+void switch_to_mode_x() {}
+
 void set_crtc(crtc_register_index index, uint8_t data) {
   misc_output_register misc_output = get_misc_output();
   if (misc_output.io_address_select) {

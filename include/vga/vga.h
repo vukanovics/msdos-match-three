@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+void switch_to_mode_x();
+
 // Input Status Register 1 has different addresses depending on the I/O address
 // select misc output register field (0 == monochrome, 1 == color)
 static const size_t INPUT_STATUS_1_READ_MONOCHROME = 0x03ba;
@@ -51,9 +53,19 @@ typedef struct {
 } crtc_register_index;
 
 // clang-format off
+static const crtc_register_index CRTC_VERTICAL_TOTAL = {0x06};
+static const crtc_register_index CRTC_OVERFLOW = {0x07};
+static const crtc_register_index CRTC_MAX_SCAN_LINE = {0x09};
 static const crtc_register_index CRTC_START_ADDRESS_HIGH = {0x0c};
 static const crtc_register_index CRTC_START_ADDRESS_LOW = {0x0d};
+static const crtc_register_index CRTC_VERTICAL_RETRACE_START = {0x10};
+static const crtc_register_index CRTC_VERTICAL_RETRACE_END = {0x11};
+static const crtc_register_index CRTC_VERTICAL_DISPLAY_ENABLE_END = {0x12};
 static const crtc_register_index CRTC_OFFSET = {0x13};
+static const crtc_register_index CRTC_UNDERLINE_LOCATION = {0x14};
+static const crtc_register_index CRTC_VBLANK_START = {0x15};
+static const crtc_register_index CRTC_VBLANK_END = {0x16};
+static const crtc_register_index CRTC_MODE_CONTROL = {0x17};
 // clang-format on
 
 void set_crtc(crtc_register_index index, uint8_t data);
