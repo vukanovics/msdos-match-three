@@ -3,3 +3,4 @@ bin/mtchthre.exe
 bin/tests.exe
 build
 compile_commands.json
+docs/
