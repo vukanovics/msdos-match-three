@@ -14,8 +14,8 @@ set (CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set (CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set (CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-set (CMAKE_C_FLAGS -I${CMAKE_CURRENT_LIST_DIR}/djgpp/i586-pc-msdosdjgpp/sys-include/)
-set (CMAKE_CXX_FLAGS -I${CMAKE_CURRENT_LIST_DIR}/djgpp/i586-pc-msdosdjgpp/sys-include/)
+set (CMAKE_C_FLAGS -I/usr/i686-pc-msdosdjgpp/sys-include/)
+set (CMAKE_CXX_FLAGS -I/usr/i686-pc-msdosdjgpp/sys-include/)
 
 set (CMAKE_EXPORT_COMPILE_COMMANDS true)
 
