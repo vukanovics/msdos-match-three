@@ -2,6 +2,73 @@
 
 #include <pc.h>
 
+const size_t INPUT_STATUS_1_READ_MONOCHROME = 0x03ba;
+const size_t INPUT_STATUS_1_READ_COLOR = 0x03da;
+
+const size_t MISC_OUTPUT_READ = 0x03cc;
+const size_t MISC_OUTPUT_WRITE = 0x03c2;
+
+const size_t CRTC_INDEX_READ_COLOR = 0x03d4;
+const size_t CRTC_INDEX_WRITE_COLOR = 0x03d4;
+const size_t CRTC_INDEX_READ_MONOCHROME = 0x03b4;
+const size_t CRTC_INDEX_WRITE_MONOCHROME = 0x03b4;
+
+const size_t CRTC_DATA_READ_COLOR = 0x03d5;
+const size_t CRTC_DATA_WRITE_COLOR = 0x03d5;
+const size_t CRTC_DATA_READ_MONOCHROME = 0x03b5;
+const size_t CRTC_DATA_WRITE_MONOCHROME = 0x03b5;
+
+struct crtc_register_index_s {
+  uint8_t d;
+};
+
+const crtc_register_index CRTC_VERTICAL_TOTAL = {0x06};
+const crtc_register_index CRTC_OVERFLOW = {0x07};
+const crtc_register_index CRTC_MAX_SCAN_LINE = {0x09};
+const crtc_register_index CRTC_START_ADDRESS_HIGH = {0x0c};
+const crtc_register_index CRTC_START_ADDRESS_LOW = {0x0d};
+const crtc_register_index CRTC_VERTICAL_RETRACE_START = {0x10};
+const crtc_register_index CRTC_VERTICAL_RETRACE_END = {0x11};
+const crtc_register_index CRTC_VERTICAL_DISPLAY_ENABLE_END = {0x12};
+const crtc_register_index CRTC_OFFSET = {0x13};
+const crtc_register_index CRTC_UNDERLINE_LOCATION = {0x14};
+const crtc_register_index CRTC_VBLANK_START = {0x15};
+const crtc_register_index CRTC_VBLANK_END = {0x16};
+const crtc_register_index CRTC_MODE_CONTROL = {0x17};
+
+const size_t AC_INDEX_READ = 0x03c0;
+const size_t AC_INDEX_WRITE = 0x03c0;
+const size_t AC_DATA_READ = 0x03c1;
+const size_t AC_DATA_WRITE = 0x03c0;
+
+struct ac_register_index_s {
+  size_t d;
+};
+
+const ac_register_index AC_HORIZONTAL_PEL_PANNING = {0x13};
+
+const size_t SC_INDEX_READ = 0x03c4;
+const size_t SC_INDEX_WRITE = 0x03c4;
+const size_t SC_DATA_READ = 0x03c5;
+const size_t SC_DATA_WRITE = 0x03c5;
+
+struct sc_register_index_s {
+  size_t d;
+};
+
+const sc_register_index SC_MAP_MASK = {0x02};
+
+const size_t GC_INDEX_READ = 0x03ce;
+const size_t GC_INDEX_WRITE = 0x03ce;
+const size_t GC_DATA_READ = 0x03cf;
+const size_t GC_DATA_WRITE = 0x03cf;
+
+struct gc_register_index_s {
+  size_t d;
+};
+
+const gc_register_index GC_MISC = {0x06};
+
 void switch_to_mode_x() {}
 
 void set_crtc(crtc_register_index index, uint8_t data) {

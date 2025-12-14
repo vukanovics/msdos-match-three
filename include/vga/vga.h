@@ -9,8 +9,8 @@ void switch_to_mode_x();
 
 // Input Status Register 1 has different addresses depending on the I/O address
 // select misc output register field (0 == monochrome, 1 == color)
-static const size_t INPUT_STATUS_1_READ_MONOCHROME = 0x03ba;
-static const size_t INPUT_STATUS_1_READ_COLOR = 0x03da;
+extern const size_t INPUT_STATUS_1_READ_MONOCHROME;
+extern const size_t INPUT_STATUS_1_READ_COLOR;
 
 typedef struct {
   bool vertical_retrace;
@@ -19,8 +19,8 @@ typedef struct {
 
 input_status_1_register get_input_status_1();
 
-static const size_t MISC_OUTPUT_READ = 0x03cc;
-static const size_t MISC_OUTPUT_WRITE = 0x03c2;
+extern const size_t MISC_OUTPUT_READ;
+extern const size_t MISC_OUTPUT_WRITE;
 
 typedef struct {
   bool vertical_sync_polarity;
@@ -36,91 +36,118 @@ misc_output_register get_misc_output();
 
 // CRT controller is unique among controllers in that its register addresses are
 // different between monochrome & color modes
-static const size_t CRTC_INDEX_READ_COLOR = 0x03d4;
-static const size_t CRTC_INDEX_WRITE_COLOR = 0x03d4;
+extern const size_t CRTC_INDEX_READ_COLOR;
+extern const size_t CRTC_INDEX_WRITE_COLOR;
 
-static const size_t CRTC_INDEX_READ_MONOCHROME = 0x03b4;
-static const size_t CRTC_INDEX_WRITE_MONOCHROME = 0x03b4;
+extern const size_t CRTC_INDEX_READ_MONOCHROME;
+extern const size_t CRTC_INDEX_WRITE_MONOCHROME;
 
-static const size_t CRTC_DATA_READ_COLOR = 0x03d5;
-static const size_t CRTC_DATA_WRITE_COLOR = 0x03d5;
+extern const size_t CRTC_DATA_READ_COLOR;
+extern const size_t CRTC_DATA_WRITE_COLOR;
 
-static const size_t CRTC_DATA_READ_MONOCHROME = 0x03b5;
-static const size_t CRTC_DATA_WRITE_MONOCHROME = 0x03b5;
+extern const size_t CRTC_DATA_READ_MONOCHROME;
+extern const size_t CRTC_DATA_WRITE_MONOCHROME;
 
-typedef struct {
-  uint8_t d;
-} crtc_register_index;
+///
+/// Opaque index identifying a CRTC register.
+///
+/// Available values are listed in @ref crtc_registers.
+///
+typedef struct crtc_register_index_s crtc_register_index;
 
-// clang-format off
-static const crtc_register_index CRTC_VERTICAL_TOTAL = {0x06};
-static const crtc_register_index CRTC_OVERFLOW = {0x07};
-static const crtc_register_index CRTC_MAX_SCAN_LINE = {0x09};
-static const crtc_register_index CRTC_START_ADDRESS_HIGH = {0x0c};
-static const crtc_register_index CRTC_START_ADDRESS_LOW = {0x0d};
-static const crtc_register_index CRTC_VERTICAL_RETRACE_START = {0x10};
-static const crtc_register_index CRTC_VERTICAL_RETRACE_END = {0x11};
-static const crtc_register_index CRTC_VERTICAL_DISPLAY_ENABLE_END = {0x12};
-static const crtc_register_index CRTC_OFFSET = {0x13};
-static const crtc_register_index CRTC_UNDERLINE_LOCATION = {0x14};
-static const crtc_register_index CRTC_VBLANK_START = {0x15};
-static const crtc_register_index CRTC_VBLANK_END = {0x16};
-static const crtc_register_index CRTC_MODE_CONTROL = {0x17};
-// clang-format on
+///
+/// @defgroup crtc_registers CRTC Register Indicies
+/// Typed indicies for the CRTC register.
+/// @{
+///
+extern const crtc_register_index CRTC_VERTICAL_TOTAL;
+extern const crtc_register_index CRTC_OVERFLOW;
+extern const crtc_register_index CRTC_MAX_SCAN_LINE;
+extern const crtc_register_index CRTC_START_ADDRESS_HIGH;
+extern const crtc_register_index CRTC_START_ADDRESS_LOW;
+extern const crtc_register_index CRTC_VERTICAL_RETRACE_START;
+extern const crtc_register_index CRTC_VERTICAL_RETRACE_END;
+extern const crtc_register_index CRTC_VERTICAL_DISPLAY_ENABLE_END;
+extern const crtc_register_index CRTC_OFFSET;
+extern const crtc_register_index CRTC_UNDERLINE_LOCATION;
+extern const crtc_register_index CRTC_VBLANK_START;
+extern const crtc_register_index CRTC_VBLANK_END;
+extern const crtc_register_index CRTC_MODE_CONTRO;
+/// @}
 
 void set_crtc(crtc_register_index index, uint8_t data);
 
 uint8_t get_crtc(crtc_register_index index);
 
-static const size_t AC_INDEX_READ = 0x03c0;
-static const size_t AC_INDEX_WRITE = 0x03c0;
+extern const size_t AC_INDEX_READ;
+extern const size_t AC_INDEX_WRITE;
 
-static const size_t AC_DATA_READ = 0x03c1;
-static const size_t AC_DATA_WRITE = 0x03c0;
+extern const size_t AC_DATA_READ;
+extern const size_t AC_DATA_WRITE;
 
-typedef struct {
-  size_t d;
-} ac_register_index;
+///
+/// Opaque index identifying a AC register.
+///
+/// Available values are listed in @ref ac_registers.
+///
+typedef struct ac_register_index_s ac_register_index;
 
-// clang-format off
-static const ac_register_index AC_HORIZONTAL_PEL_PANNING = {0x13};
-// clang-format on
+///
+/// @defgroup ac_registers AC Register Indicies
+/// Typed indicies for the AC register.
+/// @{
+///
+extern const ac_register_index AC_HORIZONTAL_PEL_PANNING;
+/// @}
 
 void set_ac(ac_register_index index, uint8_t data);
 
 uint8_t get_ac(ac_register_index index);
 
-static const size_t SC_INDEX_READ = 0x03c4;
-static const size_t SC_INDEX_WRITE = 0x03c4;
+extern const size_t SC_INDEX_READ;
+extern const size_t SC_INDEX_WRITE;
 
-static const size_t SC_DATA_READ = 0x03c5;
-static const size_t SC_DATA_WRITE = 0x03c5;
+extern const size_t SC_DATA_READ;
+extern const size_t SC_DATA_WRITE;
 
-typedef struct {
-  size_t d;
-} sc_register_index;
+///
+/// Opaque index identifying a SC register.
+///
+/// Available values are listed in @ref sc_registers.
+///
+typedef struct sc_register_index_s sc_register_index;
 
-// clang-format off
-static const sc_register_index SC_MAP_MASK = {0x02};
-// clang-format on
+///
+/// @defgroup sc_registers SC Register Indicies
+/// Typed indicies for the SC register.
+/// @{
+///
+extern const sc_register_index SC_MAP_MASK;
+/// @}
 
 void set_sc(sc_register_index index, uint8_t data);
 
 uint8_t get_sc(sc_register_index index);
 
-static const size_t GC_INDEX_READ = 0x03ce;
-static const size_t GC_INDEX_WRITE = 0x03ce;
+extern const size_t GC_INDEX_READ;
+extern const size_t GC_INDEX_WRITE;
 
-static const size_t GC_DATA_READ = 0x03cf;
-static const size_t GC_DATA_WRITE = 0x03cf;
+extern const size_t GC_DATA_READ;
+extern const size_t GC_DATA_WRITE;
 
-typedef struct {
-  size_t d;
-} gc_register_index;
-
-// clang-format off
-static const gc_register_index GC_MISC = {0x06};
-// clang-format on
+///
+/// Opaque index identifying a GC register.
+///
+/// Available values are listed in @ref gc_registers.
+///
+typedef struct gc_register_index_s gc_register_index;
+///
+/// @defgroup gc_registers GC Register Indicies
+/// Typed indicies for the GC register.
+/// @{
+///
+extern const gc_register_index GC_MISC;
+/// @}
 
 void set_gc(gc_register_index index, uint8_t data);
 
