@@ -74,10 +74,17 @@ extern const crtc_register_index CRTC_VBLANK_START;
 extern const crtc_register_index CRTC_VBLANK_END;
 extern const crtc_register_index CRTC_MODE_CONTRO;
 /// @}
+///
+/// @defgroup crtc_vertical_retrace_end_flags CRTC Vertical Retrace Register
+/// Flags
+/// @{
+///
+extern const uint8_t CRTC_VERTICAL_RETRACE_END_PROTECT;
+/// @}
 
-void set_crtc(crtc_register_index index, uint8_t data);
+void set_crtc(const crtc_register_index *index, uint8_t data);
 
-uint8_t get_crtc(crtc_register_index index);
+uint8_t get_crtc(const crtc_register_index *index);
 
 extern const size_t AC_INDEX_READ;
 extern const size_t AC_INDEX_WRITE;
@@ -100,9 +107,9 @@ typedef struct ac_register_index_s ac_register_index;
 extern const ac_register_index AC_HORIZONTAL_PEL_PANNING;
 /// @}
 
-void set_ac(ac_register_index index, uint8_t data);
+void set_ac(const ac_register_index *index, uint8_t data);
 
-uint8_t get_ac(ac_register_index index);
+uint8_t get_ac(const ac_register_index *index);
 
 extern const size_t SC_INDEX_READ;
 extern const size_t SC_INDEX_WRITE;
@@ -122,12 +129,24 @@ typedef struct sc_register_index_s sc_register_index;
 /// Typed indicies for the SC register.
 /// @{
 ///
+extern const sc_register_index SC_RESET;
+extern const sc_register_index SC_CLOCKING_MODE;
 extern const sc_register_index SC_MAP_MASK;
+extern const sc_register_index SC_CHARACTER_MAP_SELECT;
+extern const sc_register_index SC_MEMORY_MODE;
+/// @}
+///
+/// @defgroup sc_memory_mode_flags SC Memory Mode Register Flags
+/// @{
+///
+extern const uint8_t SC_MEMORY_MODE_CHAIN_4;
+extern const uint8_t SC_MEMORY_MODE_ODD_EVEN;
+extern const uint8_t SC_MEMORY_MODE_EXTENDED_MEMORY;
 /// @}
 
-void set_sc(sc_register_index index, uint8_t data);
+void set_sc(const sc_register_index *index, uint8_t data);
 
-uint8_t get_sc(sc_register_index index);
+uint8_t get_sc(const sc_register_index *index);
 
 extern const size_t GC_INDEX_READ;
 extern const size_t GC_INDEX_WRITE;
@@ -149,8 +168,8 @@ typedef struct gc_register_index_s gc_register_index;
 extern const gc_register_index GC_MISC;
 /// @}
 
-void set_gc(gc_register_index index, uint8_t data);
+void set_gc(const gc_register_index *index, uint8_t data);
 
-uint8_t get_gc(gc_register_index index);
+uint8_t get_gc(const gc_register_index *index);
 
 #endif

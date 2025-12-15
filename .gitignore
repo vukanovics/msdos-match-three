@@ -1,6 +1,7 @@
 .cache
 bin/mtchthre.exe
 bin/tests.exe
+bin/CWSDPMI.SWP
 build
 compile_commands.json
 docs/

@@ -1,6 +1,9 @@
+#include <string.h>
 #include <vga/vga.h>
 
+#include <dpmi.h>
 #include <pc.h>
+#include <sys/nearptr.h>
 
 const size_t INPUT_STATUS_1_READ_MONOCHROME = 0x03ba;
 const size_t INPUT_STATUS_1_READ_COLOR = 0x03da;
@@ -36,6 +39,8 @@ const crtc_register_index CRTC_VBLANK_START = {0x15};
 const crtc_register_index CRTC_VBLANK_END = {0x16};
 const crtc_register_index CRTC_MODE_CONTROL = {0x17};
 
+const uint8_t CRTC_VERTICAL_RETRACE_END_PROTECT = 0b10000000;
+
 const size_t AC_INDEX_READ = 0x03c0;
 const size_t AC_INDEX_WRITE = 0x03c0;
 const size_t AC_DATA_READ = 0x03c1;
@@ -56,7 +61,15 @@ struct sc_register_index_s {
   size_t d;
 };
 
+const sc_register_index SC_RESET = {0x00};
+const sc_register_index SC_CLOCKING_MODE = {0x01};
 const sc_register_index SC_MAP_MASK = {0x02};
+const sc_register_index SC_CHARACTER_MAP_SELECT = {0x03};
+const sc_register_index SC_MEMORY_MODE = {0x04};
+
+const uint8_t SC_MEMORY_MODE_CHAIN_4 = 0b00001000;
+const uint8_t SC_MEMORY_MODE_ODD_EVEN = 0b00000100;
+const uint8_t SC_MEMORY_MODE_EXTENDED_MEMORY = 0b00000010;
 
 const size_t GC_INDEX_READ = 0x03ce;
 const size_t GC_INDEX_WRITE = 0x03ce;
@@ -69,42 +82,84 @@ struct gc_register_index_s {
 
 const gc_register_index GC_MISC = {0x06};
 
-void switch_to_mode_x() {}
+void switch_to_mode_13() {
+  __dpmi_regs regs;
+  regs.x.ax = 0x13;
+  __dpmi_int(0x10, &regs);
+}
 
-void set_crtc(crtc_register_index index, uint8_t data) {
+void switch_to_mode_x() {
+  switch_to_mode_13();
+  const uint8_t sc = get_sc(&SC_MEMORY_MODE);
+  set_sc(&SC_MEMORY_MODE,
+         SC_MEMORY_MODE_EXTENDED_MEMORY | SC_MEMORY_MODE_ODD_EVEN);
+  set_sc(&SC_RESET, 0x01);
+
+  misc_output_register data = {.vertical_sync_polarity = true,
+                               .horizontal_sync_polarity = true,
+                               .clock_select = 0,
+                               .io_address_select = true,
+                               .enable_ram = true};
+
+  set_misc_output(data);
+
+  set_sc(&SC_RESET, 0x03);
+
+  set_crtc(&CRTC_VERTICAL_RETRACE_END, get_crtc(&CRTC_VERTICAL_RETRACE_END) &
+                                           ~CRTC_VERTICAL_RETRACE_END_PROTECT);
+
+  set_crtc(&CRTC_VERTICAL_TOTAL, 0x0d);
+  set_crtc(&CRTC_OVERFLOW, 0x3e);
+  set_crtc(&CRTC_MAX_SCAN_LINE, 0x41);
+  set_crtc(&CRTC_VERTICAL_RETRACE_START, 0xea);
+  set_crtc(&CRTC_VERTICAL_RETRACE_END, 0xac);
+  set_crtc(&CRTC_VERTICAL_DISPLAY_ENABLE_END, 0xdf);
+  set_crtc(&CRTC_UNDERLINE_LOCATION, 0x00);
+  set_crtc(&CRTC_VBLANK_START, 0xe7);
+  set_crtc(&CRTC_VBLANK_END, 0x06);
+  set_crtc(&CRTC_MODE_CONTROL, 0xe3);
+
+  set_sc(&SC_MAP_MASK, 0x0f);
+
+  __djgpp_nearptr_enable();
+  memset((void *)0xa0000 + __djgpp_conventional_base, 0x05, 0x8000);
+  __djgpp_nearptr_disable();
+}
+
+void set_crtc(const crtc_register_index *index, uint8_t data) {
   misc_output_register misc_output = get_misc_output();
   if (misc_output.io_address_select) {
-    outportb(CRTC_INDEX_WRITE_COLOR, index.d);
+    outportb(CRTC_INDEX_WRITE_COLOR, index->d);
     outportb(CRTC_DATA_WRITE_COLOR, data);
   } else {
-    outportb(CRTC_INDEX_WRITE_MONOCHROME, index.d);
+    outportb(CRTC_INDEX_WRITE_MONOCHROME, index->d);
     outportb(CRTC_DATA_WRITE_MONOCHROME, data);
   }
 }
 
-uint8_t get_crtc(crtc_register_index index) {
+uint8_t get_crtc(const crtc_register_index *index) {
   misc_output_register misc_output = get_misc_output();
   if (misc_output.io_address_select) {
-    outportb(CRTC_INDEX_WRITE_COLOR, index.d);
+    outportb(CRTC_INDEX_WRITE_COLOR, index->d);
     return inportb(CRTC_DATA_READ_COLOR);
   } else {
-    outportb(CRTC_INDEX_WRITE_MONOCHROME, index.d);
+    outportb(CRTC_INDEX_WRITE_MONOCHROME, index->d);
     return inportb(CRTC_DATA_READ_MONOCHROME);
   }
 }
 
-void set_ac(ac_register_index index, uint8_t data) {
+void set_ac(const ac_register_index *index, uint8_t data) {
   // reading the input status register 1 selects the address register (if the
   // data register was selected) - ref. IBM VGA XGA Technical Reference Manual
   // p. 2-89
   get_input_status_1();
-  outportb(AC_INDEX_WRITE, index.d);
+  outportb(AC_INDEX_WRITE, index->d);
   outportb(AC_DATA_WRITE, data);
 }
 
-uint8_t get_ac(ac_register_index index) {
+uint8_t get_ac(const ac_register_index *index) {
   get_input_status_1();
-  outportb(AC_INDEX_WRITE, index.d);
+  outportb(AC_INDEX_WRITE, index->d);
   return inportb(AC_DATA_READ);
 }
 
@@ -147,22 +202,22 @@ misc_output_register get_misc_output() {
   return out;
 }
 
-void set_sc(sc_register_index index, uint8_t data) {
-  outportb(SC_INDEX_WRITE, index.d);
+void set_sc(const sc_register_index *index, uint8_t data) {
+  outportb(SC_INDEX_WRITE, index->d);
   outportb(SC_DATA_WRITE, data);
 }
 
-uint8_t get_sc(sc_register_index index) {
-  outportb(SC_INDEX_WRITE, index.d);
+uint8_t get_sc(const sc_register_index *index) {
+  outportb(SC_INDEX_WRITE, index->d);
   return inportb(SC_DATA_READ);
 }
 
-void set_gc(gc_register_index index, uint8_t data) {
-  outportb(GC_INDEX_WRITE, index.d);
+void set_gc(const gc_register_index *index, uint8_t data) {
+  outportb(GC_INDEX_WRITE, index->d);
   outportb(GC_DATA_WRITE, data);
 }
 
-uint8_t get_gc(gc_register_index index) {
-  outportb(GC_INDEX_WRITE, index.d);
+uint8_t get_gc(const gc_register_index *index) {
+  outportb(GC_INDEX_WRITE, index->d);
   return inportb(GC_DATA_READ);
 }
