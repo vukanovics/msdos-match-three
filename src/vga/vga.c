@@ -71,6 +71,9 @@ const uint8_t SC_MEMORY_MODE_CHAIN_4 = 0b00001000;
 const uint8_t SC_MEMORY_MODE_ODD_EVEN = 0b00000100;
 const uint8_t SC_MEMORY_MODE_EXTENDED_MEMORY = 0b00000010;
 
+const uint8_t SC_RESET_ASR = 0b00000001;
+const uint8_t SC_RESET_SR = 0b00000010;
+
 const size_t GC_INDEX_READ = 0x03ce;
 const size_t GC_INDEX_WRITE = 0x03ce;
 const size_t GC_DATA_READ = 0x03cf;
@@ -93,7 +96,7 @@ void switch_to_mode_x() {
   const uint8_t sc = get_sc(&SC_MEMORY_MODE);
   set_sc(&SC_MEMORY_MODE,
          SC_MEMORY_MODE_EXTENDED_MEMORY | SC_MEMORY_MODE_ODD_EVEN);
-  set_sc(&SC_RESET, 0x01);
+  set_sc(&SC_RESET, SC_RESET_ASR);
 
   misc_output_register data = {.vertical_sync_polarity = true,
                                .horizontal_sync_polarity = true,
@@ -103,7 +106,7 @@ void switch_to_mode_x() {
 
   set_misc_output(data);
 
-  set_sc(&SC_RESET, 0x03);
+  set_sc(&SC_RESET, SC_RESET_SR | SC_RESET_ASR);
 
   set_crtc(&CRTC_VERTICAL_RETRACE_END, get_crtc(&CRTC_VERTICAL_RETRACE_END) &
                                            ~CRTC_VERTICAL_RETRACE_END_PROTECT);

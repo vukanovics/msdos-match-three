@@ -73,12 +73,13 @@ extern const crtc_register_index CRTC_UNDERLINE_LOCATION;
 extern const crtc_register_index CRTC_VBLANK_START;
 extern const crtc_register_index CRTC_VBLANK_END;
 extern const crtc_register_index CRTC_MODE_CONTRO;
+// clang-format off
 /// @}
 ///
-/// @defgroup crtc_vertical_retrace_end_flags CRTC Vertical Retrace Register
-/// Flags
+/// @defgroup crtc_vertical_retrace_end_flags CRTC Vertical Retrace Register Flags
 /// @{
 ///
+// clang-format on
 extern const uint8_t CRTC_VERTICAL_RETRACE_END_PROTECT;
 /// @}
 
@@ -95,6 +96,13 @@ extern const size_t AC_DATA_WRITE;
 ///
 /// Opaque index identifying a AC register.
 ///
+
+/// void set_crtc(const crtc_register_index *index, uint8_t data)When set to 0,
+/// the Asynchronous Reset field (bit 0) commands the sequencer to
+/// asynchronously clear and halt. Resetting the sequencer with this bit can
+/// cause loss of video data.
+///
+/// Opaque index identifying a AC register.
 /// Available values are listed in @ref ac_registers.
 ///
 typedef struct ac_register_index_s ac_register_index;
@@ -142,6 +150,35 @@ extern const sc_register_index SC_MEMORY_MODE;
 extern const uint8_t SC_MEMORY_MODE_CHAIN_4;
 extern const uint8_t SC_MEMORY_MODE_ODD_EVEN;
 extern const uint8_t SC_MEMORY_MODE_EXTENDED_MEMORY;
+/// @}
+///
+/// @defgroup sc_reset_flags SC Reset Register Flags
+/// @{
+///
+// clang-format off
+/// @note Specification (IBM VGA XGA Technical Reference Manual, May 19th 1992, p. 2-48):
+/// @code{.text}
+/// When set to 0, the Synchronous Reset field (bit 1)
+/// commands the sequencer to synchronously clear and
+/// halt. Bits 1 and 0 must be 1 to allow the sequencer to
+/// operate. To prevent the loss of data, bit 1 must be set
+/// to 0 during the active display interval before changing
+/// the clock selection. The clock is changed through the
+/// Clocking Mode register or the Miscellaneous Output
+/// register.
+/// @endcode
+// clang-format on
+extern const uint8_t SC_RESET_SR;
+// clang-format off
+/// @note Specification (IBM VGA XGA Technical Reference Manual, May 19th 1992, p. 2-48):
+/// @code{.text}
+/// When set to 0, the Asynchronous Reset field (bit 0)
+/// commands the sequencer to asynchronously clear and
+/// halt. Resetting the sequencer with this bit can cause
+/// loss of video data.
+/// @endcode
+// clang-format on
+extern const uint8_t SC_RESET_ASR;
 /// @}
 
 void set_sc(const sc_register_index *index, uint8_t data);
