@@ -1,9 +1,14 @@
+#include "common/image.h"
+#include "vga/planarized_image.h"
+#include <png.h>
 #include <string.h>
 #include <vga/vga.h>
 
 #include <dpmi.h>
 #include <pc.h>
 #include <sys/nearptr.h>
+
+void *const VIDEO_MEMORY_START = (void *)0xa0000;
 
 const size_t INPUT_STATUS_1_READ_MONOCHROME = 0x03ba;
 const size_t INPUT_STATUS_1_READ_COLOR = 0x03da;
@@ -74,6 +79,11 @@ const uint8_t SC_MEMORY_MODE_EXTENDED_MEMORY = 0b00000010;
 const uint8_t SC_RESET_ASR = 0b00000001;
 const uint8_t SC_RESET_SR = 0b00000010;
 
+const uint8_t SC_MAP_MASK_PLANE_1 = 0b00000001;
+const uint8_t SC_MAP_MASK_PLANE_2 = 0b00000010;
+const uint8_t SC_MAP_MASK_PLANE_3 = 0b00000100;
+const uint8_t SC_MAP_MASK_PLANE_4 = 0b00001000;
+
 const size_t GC_INDEX_READ = 0x03ce;
 const size_t GC_INDEX_WRITE = 0x03ce;
 const size_t GC_DATA_READ = 0x03cf;
@@ -84,6 +94,41 @@ struct gc_register_index_s {
 };
 
 const gc_register_index GC_MISC = {0x06};
+
+copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
+                                               rect target) {
+
+  uint32_t x_offset_per_plane = target.x / 4;
+  uint32_t screen_width_per_plane = 320 / 4;
+  uint32_t target_width_per_plane = target.size.w / 4;
+
+  for (size_t y = 0; y < target.size.h; y++) {
+
+    size_t screen_y = y + target.y;
+    void *plane_line_start = VIDEO_MEMORY_START + __djgpp_conventional_base +
+                             screen_y * screen_width_per_plane + // adjust row
+                             x_offset_per_plane; // adjust column
+    size_t plane_data_offset = y * target_width_per_plane;
+
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
+    memcpy(plane_line_start,
+           planarized_image_get_plane_1_data(source) + plane_data_offset,
+           target_width_per_plane);
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
+    memcpy(plane_line_start,
+           planarized_image_get_plane_2_data(source) + plane_data_offset,
+           target_width_per_plane);
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
+    memcpy(plane_line_start,
+           planarized_image_get_plane_3_data(source) + plane_data_offset,
+           target_width_per_plane);
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
+    memcpy(plane_line_start,
+           planarized_image_get_plane_4_data(source) + plane_data_offset,
+           target_width_per_plane);
+  }
+  return COPY_TO_FRAMEBUFFER_SUCCESS;
+}
 
 void switch_to_mode_13() {
   __dpmi_regs regs;
@@ -122,10 +167,27 @@ void switch_to_mode_x() {
   set_crtc(&CRTC_VBLANK_END, 0x06);
   set_crtc(&CRTC_MODE_CONTROL, 0xe3);
 
-  set_sc(&SC_MAP_MASK, 0x0f);
+  set_sc(&SC_MAP_MASK, 0b00001000);
 
+  uint8_t plane_1[64];
+  memset(&plane_1, 10, 64);
+  uint8_t plane_2[64];
+  memset(&plane_2, 20, 64);
+  uint8_t plane_3[64];
+  memset(&plane_3, 30, 64);
+  uint8_t plane_4[64];
+  memset(&plane_4, 40, 64);
   __djgpp_nearptr_enable();
-  memset((void *)0xa0000 + __djgpp_conventional_base, 0x05, 0x8000);
+  size size = {.h = 16, .w = 16};
+  image *source = image_new_test_columns(size);
+  // image source = {.plane_1_data = plane_1,
+  //                 .plane_2_data = plane_2,
+  //                 .plane_3_data = plane_3,
+  //                 .plane_4_data = plane_4,
+  //                 .size = {.h = 16, .w = 16}};
+  planarized_image *planarized_image = planarized_image_new(source);
+  rect target = {.x = 16, .y = 16, .size = {.h = 16, .w = 16}};
+  copy_to_framebuffer(planarized_image, target);
   __djgpp_nearptr_disable();
 }
 

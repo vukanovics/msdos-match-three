@@ -1,0 +1,36 @@
+#set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib CACHE PATH "" FORCE)
+set(PNG_SHARED OFF CACHE BOOL "" FORCE)
+
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Enable Zlib Examples" FORCE)
+add_subdirectory(zlib)
+
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+# Never build shared zlib
+if(TARGET zlib)
+  set_target_properties(zlib PROPERTIES
+    EXCLUDE_FROM_ALL TRUE
+    EXCLUDE_FROM_DEFAULT_BUILD TRUE
+  )
+endif()
+
+# Force anyone asking for ZLIB::ZLIB to get the static one
+add_library(ZLIB::ZLIB ALIAS zlibstatic)
+
+
+# set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/zlib CACHE PATH "" FORCE)
+# set(ZLIB_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/zlib/libzlibstatic.a" CACHE STRING "" FORCE)
+
+# set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/zlib/")
+set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_LIBRARIES zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_INCLUDE_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/zlib
+    ${CMAKE_CURRENT_BINARY_DIR}/zlib
+    CACHE PATH "" FORCE
+)
+
+set(PNG_SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+
+set(CMAKE_SKIP_INSTALL_RULES ON)
+add_subdirectory(libpng)
