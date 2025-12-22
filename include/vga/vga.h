@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <common/rect.h>
+#include <vga/planarized_image.h>
+
 void switch_to_mode_x();
 
 // Input Status Register 1 has different addresses depending on the I/O address
@@ -180,6 +183,14 @@ extern const uint8_t SC_RESET_SR;
 // clang-format on
 extern const uint8_t SC_RESET_ASR;
 /// @}
+///
+/// @defgroup sc_map_mask_flags SC Map Mask Register Flags
+/// @{
+extern const uint8_t SC_MAP_MASK_PLANE_1;
+extern const uint8_t SC_MAP_MASK_PLANE_2;
+extern const uint8_t SC_MAP_MASK_PLANE_3;
+extern const uint8_t SC_MAP_MASK_PLANE_4;
+/// @}
 
 void set_sc(const sc_register_index *index, uint8_t data);
 
@@ -208,5 +219,23 @@ extern const gc_register_index GC_MISC;
 void set_gc(const gc_register_index *index, uint8_t data);
 
 uint8_t get_gc(const gc_register_index *index);
+
+typedef enum copy_to_framebuffer_result_e {
+  COPY_TO_FRAMEBUFFER_SUCCESS,
+  COPY_TO_FRAMEBUFFER_ERROR_INVALID_SOURCE
+} copy_to_framebuffer_result;
+
+///
+/// @brief Loads the image from system memory to video memory.
+///
+/// Should only be used to load the image for the first time to an off-screen
+/// section of the framebuffer. Subsequently, faster framebuffer-to-framebuffer
+/// copies should be used instead.
+///
+/// @param source Source \ref planarized_image.
+/// @param target Target \ref rect.
+///
+copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
+                                               rect target);
 
 #endif
