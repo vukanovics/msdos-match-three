@@ -1,6 +1,6 @@
 #include "common/image.h"
 #include "vga/planarized_image.h"
-#include <png.h>
+#include <stdio.h>
 #include <string.h>
 #include <vga/vga.h>
 
@@ -169,24 +169,14 @@ void switch_to_mode_x() {
 
   set_sc(&SC_MAP_MASK, 0b00001000);
 
-  uint8_t plane_1[64];
-  memset(&plane_1, 10, 64);
-  uint8_t plane_2[64];
-  memset(&plane_2, 20, 64);
-  uint8_t plane_3[64];
-  memset(&plane_3, 30, 64);
-  uint8_t plane_4[64];
-  memset(&plane_4, 40, 64);
   __djgpp_nearptr_enable();
-  size size = {.h = 16, .w = 16};
-  image *source = image_new_test_columns(size);
-  // image source = {.plane_1_data = plane_1,
-  //                 .plane_2_data = plane_2,
-  //                 .plane_3_data = plane_3,
-  //                 .plane_4_data = plane_4,
-  //                 .size = {.h = 16, .w = 16}};
+  image *source = image_load("test.fun");
+  if (!source) {
+    printf("image loading failed\n");
+    return;
+  }
   planarized_image *planarized_image = planarized_image_new(source);
-  rect target = {.x = 16, .y = 16, .size = {.h = 16, .w = 16}};
+  rect target = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
   copy_to_framebuffer(planarized_image, target);
   __djgpp_nearptr_disable();
 }

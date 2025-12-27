@@ -2,11 +2,12 @@
 
 #include <common/size.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 struct image_s {
-  uint8_t *data;
   size size;
+  uint8_t *data;
 };
 
 size image_get_size(image *this) { return this->size; }
@@ -27,5 +28,26 @@ image *image_new_test_columns(size size) {
       data[y * size.w + x] = x;
     }
   }
+  return image_new(data, size);
+}
+
+image *image_load(const char *filename) {
+  FILE *file = fopen(filename, "r");
+  if (!file) {
+    printf("failed to open file\n");
+    return NULL;
+  }
+  uint16_t width = 0;
+  uint16_t height = 0;
+  fread(&width, sizeof(uint16_t), 1, file);
+  fread(&height, sizeof(uint16_t), 1, file);
+  uint8_t *data = malloc(width * height);
+  fread(data, width * height, 1, file);
+  fclose(file);
+  size size = {
+      .w = width,
+      .h = height,
+  };
+
   return image_new(data, size);
 }
