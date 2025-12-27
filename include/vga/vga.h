@@ -8,6 +8,10 @@
 #include <common/rect.h>
 #include <vga/planarized_image.h>
 
+// we are only doing mode X
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 240
+
 void switch_to_mode_x();
 
 // Input Status Register 1 has different addresses depending on the I/O address
@@ -214,6 +218,7 @@ typedef struct gc_register_index_s gc_register_index;
 /// @{
 ///
 extern const gc_register_index GC_MISC;
+extern const gc_register_index GC_BIT_MASK;
 /// @}
 
 void set_gc(const gc_register_index *index, uint8_t data);
@@ -237,5 +242,17 @@ typedef enum copy_to_framebuffer_result_e {
 ///
 copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
                                                rect target);
+
+typedef enum framebuffer_copy_result_e {
+  FRAMEBUFFER_COPY_SUCCESS,
+  FRAMEBUFFER_COPY_ALIGNMENTS_DIFFERENT,
+} framebuffer_copy_result;
+///
+/// @brief Copies pixels from source to target rects
+///
+/// Does a very fast framebuffer-to-framebuffer copy.
+/// Source and target rects must have the same column alignment.
+///
+framebuffer_copy_result framebuffer_copy(rect source, rect target);
 
 #endif

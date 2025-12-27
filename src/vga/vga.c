@@ -1,6 +1,7 @@
 #include "common/image.h"
 #include "vga/planarized_image.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <vga/vga.h>
 
@@ -94,12 +95,17 @@ struct gc_register_index_s {
 };
 
 const gc_register_index GC_MISC = {0x06};
+const gc_register_index GC_BIT_MASK = {0x08};
+
+size_t screen_pos_to_memory_pos(uint16_t x, uint16_t y) {
+  return y * SCREEN_WIDTH / 4 + x / 4;
+}
 
 copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
                                                rect target) {
 
   uint32_t x_offset_per_plane = target.x / 4;
-  uint32_t screen_width_per_plane = 320 / 4;
+  uint32_t screen_width_per_plane = SCREEN_WIDTH / 4;
   uint32_t target_width_per_plane = target.size.w / 4;
 
   for (size_t y = 0; y < target.size.h; y++) {
@@ -128,6 +134,100 @@ copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
            target_width_per_plane);
   }
   return COPY_TO_FRAMEBUFFER_SUCCESS;
+}
+
+framebuffer_copy_result framebuffer_copy(rect source, rect target) {
+  uint16_t source_alignment = source.x % 4;
+  uint16_t target_alignment = target.x % 4;
+
+  if (source_alignment != target_alignment) {
+    return FRAMEBUFFER_COPY_ALIGNMENTS_DIFFERENT;
+  }
+
+  set_gc(&GC_BIT_MASK, 0x00);
+
+  for (uint16_t row = 0; row < source.size.h; row++) {
+    uint16_t source_y = row + source.y;
+    uint16_t target_y = row + target.y;
+
+    // first we copy the potentially unaligned block
+    uint8_t mask = 0;
+    switch (source_alignment) {
+    case 0:
+      mask += SC_MAP_MASK_PLANE_1;
+      // fallthrough
+    case 1:
+      mask += SC_MAP_MASK_PLANE_2;
+      // fallthrough
+    case 2:
+      mask += SC_MAP_MASK_PLANE_3;
+      // fallthrough
+    case 3:
+      mask += SC_MAP_MASK_PLANE_4;
+      break;
+    }
+
+    set_sc(&SC_MAP_MASK, mask);
+
+    uint16_t source_first_block_start =
+        screen_pos_to_memory_pos(source.x - source_alignment, source_y);
+
+    uint16_t target_first_block_start =
+        screen_pos_to_memory_pos(target.x - target_alignment, target_y);
+
+    memcpy(target_first_block_start + __djgpp_conventional_base +
+               VIDEO_MEMORY_START,
+           source_first_block_start + __djgpp_conventional_base +
+               VIDEO_MEMORY_START,
+           1);
+
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1 | SC_MAP_MASK_PLANE_2 |
+                             SC_MAP_MASK_PLANE_3 | SC_MAP_MASK_PLANE_4);
+    for (uint16_t column_group = 1; column_group < source.size.w / 4 - 1;
+         column_group++) {
+      uint16_t column_start = column_group * 4;
+      uint16_t source_block_start = screen_pos_to_memory_pos(
+          column_start + source.x - source_alignment, source_y);
+
+      uint16_t target_block_start = screen_pos_to_memory_pos(
+          column_start + target.x - target_alignment, target_y);
+      memcpy(
+          target_block_start + __djgpp_conventional_base + VIDEO_MEMORY_START,
+          source_block_start + __djgpp_conventional_base + VIDEO_MEMORY_START,
+          1);
+    }
+
+    mask = 0;
+    switch (source_alignment) {
+    case 0:
+      mask += SC_MAP_MASK_PLANE_4;
+      // fallthrough
+    case 1:
+      mask += SC_MAP_MASK_PLANE_3;
+      // fallthrough
+    case 2:
+      mask += SC_MAP_MASK_PLANE_2;
+      // fallthrough
+    case 3:
+      mask += SC_MAP_MASK_PLANE_1;
+      break;
+    }
+
+    set_sc(&SC_MAP_MASK, mask);
+    uint16_t source_last_block_start = screen_pos_to_memory_pos(
+        source.x - source_alignment + source.size.w - 4, source_y);
+
+    uint16_t target_last_block_start = screen_pos_to_memory_pos(
+        target.x - target_alignment + source.size.w - 4, target_y);
+
+    memcpy(target_last_block_start + __djgpp_conventional_base +
+               VIDEO_MEMORY_START,
+           source_last_block_start + __djgpp_conventional_base +
+               VIDEO_MEMORY_START,
+           1);
+  }
+
+  return FRAMEBUFFER_COPY_SUCCESS;
 }
 
 void switch_to_mode_13() {
@@ -177,7 +277,24 @@ void switch_to_mode_x() {
   }
   planarized_image *planarized_image = planarized_image_new(source);
   rect target = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
-  copy_to_framebuffer(planarized_image, target);
+  rect source_rect = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
+  rect target_rect = {.x = SCREEN_WIDTH + 128,
+                      .y = SCREEN_HEIGHT + 128,
+                      .size = {.h = 32, .w = 32}};
+  copy_to_framebuffer(planarized_image, target_rect);
+  int funny_offset = 0;
+  while (true) {
+    funny_offset = funny_offset % 32 + 4;
+    for (int x = 0; x < SCREEN_WIDTH; x += 32) {
+      for (int y = 0; y < SCREEN_HEIGHT; y += 32) {
+        rect target_rect_2 = {.x = x + funny_offset,
+                              .y = y + funny_offset,
+                              .size = {.h = 32, .w = 32}};
+
+        framebuffer_copy(target_rect, target_rect_2);
+      }
+    }
+  }
   __djgpp_nearptr_disable();
 }
 
