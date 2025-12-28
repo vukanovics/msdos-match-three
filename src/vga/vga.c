@@ -110,26 +110,87 @@ copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
 
   for (size_t y = 0; y < target.size.h; y++) {
 
+    uint16_t alignment = target.x % 4;
+
     size_t screen_y = y + target.y;
     void *plane_line_start = VIDEO_MEMORY_START + __djgpp_conventional_base +
                              screen_y * screen_width_per_plane + // adjust row
                              x_offset_per_plane; // adjust column
     size_t plane_data_offset = y * target_width_per_plane;
 
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
-    memcpy(plane_line_start,
+    switch (alignment) {
+    case 0:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
+      break;
+    case 1:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
+      break;
+    case 2:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
+      break;
+    case 3:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
+      break;
+    }
+
+    memcpy(plane_line_start + ((alignment > 3) ? 1 : 0),
            planarized_image_get_plane_1_data(source) + plane_data_offset,
            target_width_per_plane);
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
-    memcpy(plane_line_start,
+
+    switch (alignment) {
+    case 0:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
+      break;
+    case 1:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
+      break;
+    case 2:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
+      break;
+    case 3:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
+      break;
+    }
+
+    memcpy(plane_line_start + ((alignment > 2) ? 1 : 0),
            planarized_image_get_plane_2_data(source) + plane_data_offset,
            target_width_per_plane);
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
-    memcpy(plane_line_start,
+
+    switch (alignment) {
+    case 0:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
+      break;
+    case 1:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
+      break;
+    case 2:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
+      break;
+    case 3:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
+      break;
+    }
+
+    memcpy(plane_line_start + ((alignment > 1) ? 1 : 0),
            planarized_image_get_plane_3_data(source) + plane_data_offset,
            target_width_per_plane);
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
-    memcpy(plane_line_start,
+
+    switch (alignment) {
+    case 0:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
+      break;
+    case 1:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
+      break;
+    case 2:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
+      break;
+    case 3:
+      set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
+      break;
+    }
+
+    memcpy(plane_line_start + ((alignment > 0) ? 1 : 0),
            planarized_image_get_plane_4_data(source) + plane_data_offset,
            target_width_per_plane);
   }
@@ -278,23 +339,17 @@ void switch_to_mode_x() {
   planarized_image *planarized_image = planarized_image_new(source);
   rect target = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
   rect source_rect = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
-  rect target_rect = {.x = SCREEN_WIDTH + 128,
-                      .y = SCREEN_HEIGHT + 128,
+  rect target_rect = {.x = SCREEN_WIDTH + 129,
+                      .y = SCREEN_HEIGHT + 129,
                       .size = {.h = 32, .w = 32}};
-  copy_to_framebuffer(planarized_image, target_rect);
-  int funny_offset = 0;
-  while (true) {
-    funny_offset = funny_offset % 32 + 4;
-    for (int x = 0; x < SCREEN_WIDTH; x += 32) {
-      for (int y = 0; y < SCREEN_HEIGHT; y += 32) {
-        rect target_rect_2 = {.x = x + funny_offset,
-                              .y = y + funny_offset,
-                              .size = {.h = 32, .w = 32}};
+  rect target_rect_2 = {.x = 1, .y = 1, .size = {.h = 32, .w = 32}};
+  rect target_rect_3 = {.x = 52, .y = 2, .size = {.h = 32, .w = 32}};
+  rect target_rect_4 = {.x = 103, .y = 3, .size = {.h = 32, .w = 32}};
 
-        framebuffer_copy(target_rect, target_rect_2);
-      }
-    }
-  }
+  copy_to_framebuffer(planarized_image, target_rect_2);
+  copy_to_framebuffer(planarized_image, target_rect_3);
+  copy_to_framebuffer(planarized_image, target_rect_4);
+  // framebuffer_copy(target_rect, target_rect_2);
   __djgpp_nearptr_disable();
 }
 
