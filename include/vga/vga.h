@@ -14,6 +14,8 @@
 
 void switch_to_mode_x();
 
+void switch_to_mode_3();
+
 // Input Status Register 1 has different addresses depending on the I/O address
 // select misc output register field (0 == monochrome, 1 == color)
 extern const size_t INPUT_STATUS_1_READ_MONOCHROME;
@@ -254,5 +256,7 @@ typedef enum framebuffer_copy_result_e {
 /// Source and target rects must have the same column alignment.
 ///
 framebuffer_copy_result framebuffer_copy(rect source, rect target);
+
+char read_pixel(uint16_t x, uint16_t y);
 
 #endif

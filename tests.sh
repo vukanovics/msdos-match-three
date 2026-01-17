@@ -1,2 +1,2 @@
 #!/bin/bash
-dosbox -c "mount c $(pwd)/bin" -c "c:" -c "cwsdpmi.exe" -c "tests.exe"
+dosbox-x -c "mount c $(pwd)/bin" -c "c:" -c "cwsdpmi.exe" -c "tests.exe"

@@ -51,3 +51,7 @@ image *image_load(const char *filename) {
 
   return image_new(data, size);
 }
+
+uint8_t image_get_pixel(image *this, uint16_t x, uint16_t y) {
+  return this->data[y * this->size.w + x];
+}

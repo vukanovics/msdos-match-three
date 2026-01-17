@@ -28,6 +28,15 @@ int main(int argc, char **argv) {
 
   printf("gc_set_get: %s\n", gc_set_get() ? success() : failed());
 
+  printf("copy_to_framebuffer_x_offset_0: %s\n",
+         copy_to_framebuffer_x_offset_0() ? success() : failed());
+  printf("copy_to_framebuffer_x_offset_1: %s\n",
+         copy_to_framebuffer_x_offset_1() ? success() : failed());
+  printf("copy_to_framebuffer_x_offset_2: %s\n",
+         copy_to_framebuffer_x_offset_2() ? success() : failed());
+  printf("copy_to_framebuffer_x_offset_3: %s\n",
+         copy_to_framebuffer_x_offset_3() ? success() : failed());
+
   if (any_failed != 0) {
     printf("###############################################################\n");
     printf("######################SOME TESTS FAILED!#######################\n");

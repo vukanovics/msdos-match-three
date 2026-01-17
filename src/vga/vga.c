@@ -297,6 +297,12 @@ void switch_to_mode_13() {
   __dpmi_int(0x10, &regs);
 }
 
+void switch_to_mode_3() {
+  __dpmi_regs regs;
+  regs.x.ax = 0x03;
+  __dpmi_int(0x10, &regs);
+}
+
 void switch_to_mode_x() {
   switch_to_mode_13();
   const uint8_t sc = get_sc(&SC_MEMORY_MODE);
@@ -447,4 +453,31 @@ void set_gc(const gc_register_index *index, uint8_t data) {
 uint8_t get_gc(const gc_register_index *index) {
   outportb(GC_INDEX_WRITE, index->d);
   return inportb(GC_DATA_READ);
+}
+
+char read_pixel(uint16_t x, uint16_t y) {
+  int alignment = x % 4;
+  size_t memory_position = screen_pos_to_memory_pos(x - alignment, y);
+
+  switch (alignment) {
+  case 0:
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
+    break;
+  case 1:
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
+    break;
+  case 2:
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
+    break;
+  case 3:
+    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
+    break;
+  }
+
+  // printf("would read at %d\n", memory_position);
+  // return 0;
+  char result = 0;
+  memcpy(&result,
+         (__djgpp_conventional_base + VIDEO_MEMORY_START + memory_position), 1);
+  return result;
 }

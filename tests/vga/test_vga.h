@@ -12,4 +12,9 @@ int sc_disable_chain4();
 
 int gc_set_get();
 
+int copy_to_framebuffer_x_offset_0();
+int copy_to_framebuffer_x_offset_1();
+int copy_to_framebuffer_x_offset_2();
+int copy_to_framebuffer_x_offset_3();
+
 #endif

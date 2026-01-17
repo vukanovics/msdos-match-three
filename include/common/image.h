@@ -17,6 +17,8 @@ size image_get_size(image *this);
 
 uint8_t *image_get_data(image *this);
 
+uint8_t image_get_pixel(image *this, uint16_t x, uint16_t y);
+
 image *image_load(const char *filename);
 
 #endif

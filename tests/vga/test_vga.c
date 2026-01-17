@@ -1,3 +1,7 @@
+#include "common/image.h"
+#include "conio.h"
+#include "sys/nearptr.h"
+#include "vga/planarized_image.h"
 #include <stdio.h>
 #include <vga/vga.h>
 
@@ -71,3 +75,39 @@ int gc_set_get() {
   set_gc(&GC_MISC, prev);
   return horizontal_pel_panning == 0x08;
 }
+
+int copy_to_framebuffer_x_offset_0() {
+  int result = 1;
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  size size = {.h = 32, .w = 32};
+  image *source = image_new_test_columns(size);
+  planarized_image *planarized_image = planarized_image_new(source);
+  rect target = {.x = 0, .y = 0, .size = {.h = 32, .w = 32}};
+  copy_to_framebuffer(planarized_image, target);
+  getch();
+  char pixel_1 = read_pixel(0, 0);
+  char pixel_2 = read_pixel(1, 1);
+  char pixel_3 = read_pixel(2, 2);
+  char pixel_4 = read_pixel(3, 3);
+  for (int x = 0; x < 32; x++) {
+    for (int y = 0; y < 32; y++) {
+      if (image_get_pixel(source, x, y) != read_pixel(x, y)) {
+        result = 0;
+        goto cleanup;
+      }
+    }
+  }
+
+cleanup:
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  printf("pixel 1=%d\n", pixel_1);
+  printf("pixel 2=%d\n", pixel_2);
+  printf("pixel 3=%d\n", pixel_3);
+  printf("pixel 4=%d\n", pixel_4);
+  return result;
+}
+int copy_to_framebuffer_x_offset_1() { return 0; }
+int copy_to_framebuffer_x_offset_2() { return 0; }
+int copy_to_framebuffer_x_offset_3() { return 0; }
