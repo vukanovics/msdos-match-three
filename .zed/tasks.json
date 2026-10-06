@@ -1,0 +1,17 @@
+[
+  {
+    "label": "Compile",
+    "command": "cmake --build build && cmake --install build",
+    "shell": {
+      "program": "sh"
+    },
+    "save": "all"
+  },
+  {
+    "label": "Run",
+    "shell": {
+      "program": "sh"
+    },
+    "command": "dosbox-x -c \"mount c $(pwd)/bin\" -c 'c:' -c 'cwsdpmi.exe' -c 'mtchthre.exe' -nopromptfolder"
+  }
+]
