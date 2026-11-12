@@ -258,6 +258,6 @@ typedef enum framebuffer_copy_result_e {
 ///
 framebuffer_copy_result framebuffer_copy(rect source, rect target);
 
-char read_pixel(uint16_t x, uint16_t y);
+uint8_t read_pixel(uint16_t x, uint16_t y);
 
 #endif

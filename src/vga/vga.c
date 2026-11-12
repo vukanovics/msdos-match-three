@@ -461,7 +461,7 @@ uint8_t get_gc(const gc_register_index *index) {
   return inportb(GC_DATA_READ);
 }
 
-char read_pixel(uint16_t x, uint16_t y) {
+uint8_t read_pixel(uint16_t x, uint16_t y) {
   int alignment = x % 4;
   size_t memory_position = screen_pos_to_memory_pos(x - alignment, y);
 
@@ -482,7 +482,7 @@ char read_pixel(uint16_t x, uint16_t y) {
 
   // printf("would read at %d\n", memory_position);
   // return 0;
-  char result = 0;
+  uint8_t result = 0;
   memcpy(&result,
          (__djgpp_conventional_base + VIDEO_MEMORY_START + memory_position), 1);
   return result;
