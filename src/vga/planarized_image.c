@@ -1,4 +1,5 @@
 #include "common/image.h"
+#include <assert.h>
 #include <stdlib.h>
 #include <vga/planarized_image.h>
 
@@ -16,7 +17,9 @@ struct planarized_image_s {
 planarized_image *planarized_image_new(image *source) {
   size source_size = image_get_size(source);
   uint8_t *source_data = image_get_data(source);
-  size_t bytes_per_plane = source_size.w * source_size.h / 4;
+  assert(source_size.w % 4 == 0);
+  size_t width_per_plane = source_size.w / 4;
+  size_t bytes_per_plane = width_per_plane * source_size.h;
   uint8_t *plane_1_data = malloc(bytes_per_plane);
   uint8_t *plane_2_data = malloc(bytes_per_plane);
   uint8_t *plane_3_data = malloc(bytes_per_plane);
@@ -25,19 +28,19 @@ planarized_image *planarized_image_new(image *source) {
     for (size_t x = 0; x < source_size.w; x++) {
       switch (x % 4) {
       case 0:
-        plane_1_data[y * source_size.w / 4 + x / 4] =
+        plane_1_data[y * width_per_plane + x / 4] =
             source_data[y * source_size.w + x];
         break;
       case 1:
-        plane_2_data[y * source_size.w / 4 + x / 4] =
+        plane_2_data[y * width_per_plane + x / 4] =
             source_data[y * source_size.w + x];
         break;
       case 2:
-        plane_3_data[y * source_size.w / 4 + x / 4] =
+        plane_3_data[y * width_per_plane + x / 4] =
             source_data[y * source_size.w + x];
         break;
       case 3:
-        plane_4_data[y * source_size.w / 4 + x / 4] =
+        plane_4_data[y * width_per_plane + x / 4] =
             source_data[y * source_size.w + x];
         break;
       }

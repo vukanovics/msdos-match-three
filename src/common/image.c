@@ -1,5 +1,6 @@
 #include <common/image.h>
 
+#include <assert.h>
 #include <common/size.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@ size image_get_size(image *this) { return this->size; }
 uint8_t *image_get_data(image *this) { return this->data; }
 
 image *image_new(uint8_t *data, size size) {
+  assert(size.w % 4 == 0);
   image *this = malloc(sizeof(image));
   this->data = data;
   this->size = size;
