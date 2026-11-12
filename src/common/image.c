@@ -32,7 +32,7 @@ image *image_new_test_columns(size size) {
 }
 
 image *image_load(const char *filename) {
-  FILE *file = fopen(filename, "r");
+  FILE *file = fopen(filename, "rb");
   if (!file) {
     printf("failed to open file\n");
     return NULL;
