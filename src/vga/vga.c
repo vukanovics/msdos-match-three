@@ -400,9 +400,9 @@ input_status_1_register get_input_status_1() {
   uint8_t buffer = 0;
   misc_output_register misc_output = get_misc_output();
   if (misc_output.io_address_select) {
-    uint8_t buffer = inportb(INPUT_STATUS_1_READ_COLOR);
+    buffer = inportb(INPUT_STATUS_1_READ_COLOR);
   } else {
-    uint8_t buffer = inportb(INPUT_STATUS_1_READ_MONOCHROME);
+    buffer = inportb(INPUT_STATUS_1_READ_MONOCHROME);
   }
 
   input_status_1_register out;
