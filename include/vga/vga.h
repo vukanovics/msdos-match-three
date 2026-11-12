@@ -81,7 +81,7 @@ extern const crtc_register_index CRTC_OFFSET;
 extern const crtc_register_index CRTC_UNDERLINE_LOCATION;
 extern const crtc_register_index CRTC_VBLANK_START;
 extern const crtc_register_index CRTC_VBLANK_END;
-extern const crtc_register_index CRTC_MODE_CONTRO;
+extern const crtc_register_index CRTC_MODE_CONTROL;
 // clang-format off
 /// @}
 ///
