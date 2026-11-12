@@ -416,7 +416,7 @@ input_status_1_register get_input_status_1() {
 void set_misc_output(misc_output_register data) {
   uint8_t buffer = data.vertical_sync_polarity << 7 |
                    data.horizontal_sync_polarity << 6 | 0 << 5 | 0 << 4 |
-                   data.clock_select << 3 | data.enable_ram << 1 |
+                   data.clock_select << 2 | data.enable_ram << 1 |
                    data.io_address_select;
   outportb(MISC_OUTPUT_WRITE, buffer);
 }
