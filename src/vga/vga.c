@@ -198,6 +198,12 @@ copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
 }
 
 framebuffer_copy_result framebuffer_copy(rect source, rect target) {
+  // the block loop below computes source.size.w / 4 - 1, which would underflow
+  // for a width that is not strictly greater than 4
+  if (source.size.w <= 4) {
+    return FRAMEBUFFER_COPY_WIDTH_TOO_SMALL;
+  }
+
   uint16_t source_alignment = source.x % 4;
   uint16_t target_alignment = target.x % 4;
 

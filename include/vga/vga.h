@@ -248,6 +248,7 @@ copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
 typedef enum framebuffer_copy_result_e {
   FRAMEBUFFER_COPY_SUCCESS,
   FRAMEBUFFER_COPY_ALIGNMENTS_DIFFERENT,
+  FRAMEBUFFER_COPY_WIDTH_TOO_SMALL,
 } framebuffer_copy_result;
 ///
 /// @brief Copies pixels from source to target rects
