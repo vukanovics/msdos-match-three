@@ -3,6 +3,7 @@
 
 #include <conio.h>
 #include <sys/nearptr.h>
+#include <time.h>
 
 #define KEY_UP 0x48
 #define KEY_DOWN 0x50
@@ -18,32 +19,48 @@ int main(int argc, char **argv) {
   game *current_game = game_new();
   game_render(current_game);
 
+  uclock_t last = uclock();
   int running = 1;
-  while (running) {
-    int key = getch();
 
-    if (key == 0) {
-      int extended = getch();
-      switch (extended) {
-      case KEY_UP:
-        game_move_selection(current_game, 0, -1);
-        break;
-      case KEY_DOWN:
-        game_move_selection(current_game, 0, 1);
-        break;
-      case KEY_LEFT:
-        game_move_selection(current_game, -1, 0);
-        break;
-      case KEY_RIGHT:
-        game_move_selection(current_game, 1, 0);
-        break;
+  while (running) {
+    uclock_t now = uclock();
+    float dt = (float)(now - last) / (float)UCLOCKS_PER_SEC;
+    last = now;
+
+    if (game_update(current_game, dt)) {
+      game_render(current_game);
+    }
+
+    if (!game_is_animating(current_game) && kbhit()) {
+      int key = getch();
+
+      if (key == 0) {
+        int extended = getch();
+        switch (extended) {
+        case KEY_UP:
+          game_move_selection(current_game, 0, -1);
+          break;
+        case KEY_DOWN:
+          game_move_selection(current_game, 0, 1);
+          break;
+        case KEY_LEFT:
+          game_move_selection(current_game, -1, 0);
+          break;
+        case KEY_RIGHT:
+          game_move_selection(current_game, 1, 0);
+          break;
+        }
+        game_render(current_game);
+      } else if (key == KEY_ENTER) {
+        game_select(current_game);
+        game_render(current_game);
+      } else if (key == KEY_ESCAPE) {
+        running = 0;
       }
-      game_render(current_game);
-    } else if (key == KEY_ENTER) {
-      game_select(current_game);
-      game_render(current_game);
-    } else if (key == KEY_ESCAPE) {
-      running = 0;
+    }
+
+    uclock_t frame_end = now + UCLOCKS_PER_SEC / 60;
+    while (uclock() < frame_end) {
     }
   }
 

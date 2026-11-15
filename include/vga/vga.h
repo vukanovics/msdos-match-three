@@ -269,4 +269,14 @@ void write_pixel(uint16_t x, uint16_t y, uint8_t color);
 ///
 void set_palette(const uint8_t *rgb, uint16_t count);
 
+///
+/// @brief Selects the page (per-plane byte offset) that drawing targets.
+///
+void set_draw_page(size_t base);
+
+///
+/// @brief Points the display at the page at the given per-plane byte offset.
+///
+void set_display_start(size_t base);
+
 #endif

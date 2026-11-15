@@ -15,8 +15,9 @@ TILE_WIDTH = 24
 TILE_HEIGHT = 24
 TILE_COUNT = 6
 
-# Reserve the last two palette entries for the game's UI (cursor / picked).
-COLOR_COUNT = 254
+# Reserve the last three palette entries for the game's UI.
+COLOR_COUNT = 253
+BACKGROUND_INDEX = 253
 CURSOR_INDEX = 254
 PICKED_INDEX = 255
 
@@ -39,6 +40,7 @@ def main(sprite_path, output_path):
 
     palette = sheet.getpalette()[: COLOR_COUNT * 3]
     palette += [0] * (256 * 3 - len(palette))
+    palette[BACKGROUND_INDEX * 3:BACKGROUND_INDEX * 3 + 3] = [0, 0, 0]
     palette[CURSOR_INDEX * 3:CURSOR_INDEX * 3 + 3] = [255, 255, 255]
     palette[PICKED_INDEX * 3:PICKED_INDEX * 3 + 3] = [255, 0, 0]
 
@@ -56,6 +58,7 @@ def main(sprite_path, output_path):
     lines.append("#define MATCH3_TILE_COUNT %d" % TILE_COUNT)
     lines.append("#define MATCH3_TILE_WIDTH %d" % TILE_WIDTH)
     lines.append("#define MATCH3_TILE_HEIGHT %d" % TILE_HEIGHT)
+    lines.append("#define MATCH3_BACKGROUND_COLOR %d" % BACKGROUND_INDEX)
     lines.append("#define MATCH3_CURSOR_COLOR %d" % CURSOR_INDEX)
     lines.append("#define MATCH3_PICKED_COLOR %d" % PICKED_INDEX)
     lines.append("")

@@ -6,3 +6,4 @@ bin/TESTS.LOG
 build
 compile_commands.json
 docs/
+references/

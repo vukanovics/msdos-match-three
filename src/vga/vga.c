@@ -99,8 +99,32 @@ const gc_register_index GC_MODE = {0x05};
 const gc_register_index GC_MISC = {0x06};
 const gc_register_index GC_BIT_MASK = {0x08};
 
+// The CRTC start-address registers take a byte offset in Mode X.
+#define PAGE_ADDRESS_UNIT 1
+
+static size_t drawing_page_base = 0;
+
+void set_draw_page(size_t base) { drawing_page_base = base; }
+
 size_t screen_pos_to_memory_pos(uint16_t x, uint16_t y) {
-  return y * SCREEN_WIDTH / 4 + x / 4;
+  return drawing_page_base + y * SCREEN_WIDTH / 4 + x / 4;
+}
+
+void set_display_start(size_t base) {
+  uint16_t address = (uint16_t)(base / PAGE_ADDRESS_UNIT);
+
+  // The CRTC latches the start address at the start of vertical retrace, and
+  // the registers should be loaded during active display. Wait for active
+  // display, load the address, then wait for the retrace that latches it so
+  // the caller can safely draw into the other (now hidden) page.
+  while (get_input_status_1().vertical_retrace) {
+  }
+
+  set_crtc(&CRTC_START_ADDRESS_HIGH, (uint8_t)(address >> 8));
+  set_crtc(&CRTC_START_ADDRESS_LOW, (uint8_t)(address & 0xff));
+
+  while (!get_input_status_1().vertical_retrace) {
+  }
 }
 
 copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
@@ -116,6 +140,7 @@ copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
 
     size_t screen_y = y + target.y;
     void *plane_line_start = VIDEO_MEMORY_START + __djgpp_conventional_base +
+                             drawing_page_base + // adjust page
                              screen_y * screen_width_per_plane + // adjust row
                              x_offset_per_plane; // adjust column
     size_t plane_data_offset = y * target_width_per_plane;
