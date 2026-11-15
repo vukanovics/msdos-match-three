@@ -311,7 +311,6 @@ void switch_to_mode_3() {
 
 void switch_to_mode_x() {
   switch_to_mode_13();
-  const uint8_t sc = get_sc(&SC_MEMORY_MODE);
   set_sc(&SC_MEMORY_MODE,
          SC_MEMORY_MODE_EXTENDED_MEMORY | SC_MEMORY_MODE_ODD_EVEN);
   set_sc(&SC_RESET, SC_RESET_ASR);
@@ -341,28 +340,6 @@ void switch_to_mode_x() {
   set_crtc(&CRTC_MODE_CONTROL, 0xe3);
 
   set_sc(&SC_MAP_MASK, 0b00001000);
-
-  __djgpp_nearptr_enable();
-  image *source = image_load("test.fun");
-  if (!source) {
-    printf("image loading failed\n");
-    return;
-  }
-  planarized_image *planarized_image = planarized_image_new(source);
-  rect target = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
-  rect source_rect = {.x = 16, .y = 16, .size = {.h = 32, .w = 32}};
-  rect target_rect = {.x = SCREEN_WIDTH + 129,
-                      .y = SCREEN_HEIGHT + 129,
-                      .size = {.h = 32, .w = 32}};
-  rect target_rect_2 = {.x = 1, .y = 1, .size = {.h = 32, .w = 32}};
-  rect target_rect_3 = {.x = 52, .y = 2, .size = {.h = 32, .w = 32}};
-  rect target_rect_4 = {.x = 103, .y = 3, .size = {.h = 32, .w = 32}};
-
-  copy_to_framebuffer(planarized_image, target_rect_2);
-  copy_to_framebuffer(planarized_image, target_rect_3);
-  copy_to_framebuffer(planarized_image, target_rect_4);
-  // framebuffer_copy(target_rect, target_rect_2);
-  __djgpp_nearptr_disable();
 }
 
 void set_crtc(const crtc_register_index *index, uint8_t data) {
