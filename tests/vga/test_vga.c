@@ -77,40 +77,62 @@ int gc_set_get() {
   return horizontal_pel_panning == 0x08;
 }
 
-int copy_to_framebuffer_x_offset_0() {
-  int result = 1;
-  switch_to_mode_x();
-  __djgpp_nearptr_enable();
-  size size = {.h = 32, .w = 32};
-  image *source = image_new_test_columns(size);
-  planarized_image *planarized_image = planarized_image_new(source);
-  rect target = {.x = 0, .y = 0, .size = {.h = 32, .w = 32}};
-  copy_to_framebuffer(planarized_image, target);
-  char pixel_1 = read_pixel(0, 0);
-  char pixel_2 = read_pixel(1, 1);
-  char pixel_3 = read_pixel(2, 2);
-  char pixel_4 = read_pixel(3, 3);
+static int run_copy_to_framebuffer(rect target) {
+  size test_size = {.h = 32, .w = 32};
+  image *source = image_new_test_columns(test_size);
+  planarized_image *planarized = planarized_image_new(source);
+  copy_to_framebuffer(planarized, target);
+
   for (int x = 0; x < 32; x++) {
     for (int y = 0; y < 32; y++) {
-      if (image_get_pixel(source, x, y) != read_pixel(x, y)) {
-        result = 0;
-        goto cleanup;
+      if (image_get_pixel(source, x, y) !=
+          read_pixel(target.x + x, target.y + y)) {
+        return 0;
       }
     }
   }
+  return 1;
+}
 
-cleanup:
+int copy_to_framebuffer_x_offset_0() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 0, .y = 0, .size = {.h = 32, .w = 32}};
+  int result = run_copy_to_framebuffer(target);
   __djgpp_nearptr_disable();
   switch_to_mode_3();
-  test_log("pixel 1=%d\n", pixel_1);
-  test_log("pixel 2=%d\n", pixel_2);
-  test_log("pixel 3=%d\n", pixel_3);
-  test_log("pixel 4=%d\n", pixel_4);
   return result;
 }
-int copy_to_framebuffer_x_offset_1() { return 0; }
-int copy_to_framebuffer_x_offset_2() { return 0; }
-int copy_to_framebuffer_x_offset_3() { return 0; }
+
+int copy_to_framebuffer_x_offset_1() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 1, .y = 0, .size = {.h = 32, .w = 32}};
+  int result = run_copy_to_framebuffer(target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
+
+int copy_to_framebuffer_x_offset_2() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 2, .y = 0, .size = {.h = 32, .w = 32}};
+  int result = run_copy_to_framebuffer(target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
+
+int copy_to_framebuffer_x_offset_3() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 3, .y = 0, .size = {.h = 32, .w = 32}};
+  int result = run_copy_to_framebuffer(target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
 
 // A pattern that varies in both x and y, so that a copy which lands on the
 // wrong row is detected (a columns-only pattern would not catch that).
