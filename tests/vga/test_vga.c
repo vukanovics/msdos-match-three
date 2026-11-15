@@ -1,5 +1,6 @@
 #include "common/image.h"
 #include "conio.h"
+#include "log.h"
 #include "sys/nearptr.h"
 #include "vga/planarized_image.h"
 #include <stdio.h>
@@ -65,7 +66,7 @@ int sc_disable_chain4() {
   uint8_t prev = get_sc(&SC_MEMORY_MODE);
   set_sc(&SC_MEMORY_MODE, 0 & ~SC_MEMORY_MODE_CHAIN_4);
   uint8_t current = get_sc(&SC_MEMORY_MODE);
-  printf("prev=%d,curr=%d", prev, current);
+  test_log("prev=%d,curr=%d\n", prev, current);
   return prev != current;
 }
 
@@ -103,10 +104,10 @@ int copy_to_framebuffer_x_offset_0() {
 cleanup:
   __djgpp_nearptr_disable();
   switch_to_mode_3();
-  printf("pixel 1=%d\n", pixel_1);
-  printf("pixel 2=%d\n", pixel_2);
-  printf("pixel 3=%d\n", pixel_3);
-  printf("pixel 4=%d\n", pixel_4);
+  test_log("pixel 1=%d\n", pixel_1);
+  test_log("pixel 2=%d\n", pixel_2);
+  test_log("pixel 3=%d\n", pixel_3);
+  test_log("pixel 4=%d\n", pixel_4);
   return result;
 }
 int copy_to_framebuffer_x_offset_1() { return 0; }
