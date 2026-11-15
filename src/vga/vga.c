@@ -95,6 +95,7 @@ struct gc_register_index_s {
 };
 
 const gc_register_index GC_READ_MAP_SELECT = {0x04};
+const gc_register_index GC_MODE = {0x05};
 const gc_register_index GC_MISC = {0x06};
 const gc_register_index GC_BIT_MASK = {0x08};
 
@@ -212,6 +213,11 @@ framebuffer_copy_result framebuffer_copy(rect source, rect target) {
     return FRAMEBUFFER_COPY_ALIGNMENTS_DIFFERENT;
   }
 
+  // Write mode 1 writes the latched planes to the enabled planes. The default
+  // write mode 0 would instead write the single CPU-read byte to every enabled
+  // plane, which is why the per-plane latch copy below needs mode 1.
+  uint8_t gc_mode = get_gc(&GC_MODE);
+  set_gc(&GC_MODE, (gc_mode & ~0b00000011) | 0b00000001);
   set_gc(&GC_BIT_MASK, 0xff);
 
   for (uint16_t row = 0; row < source.size.h; row++) {
@@ -295,6 +301,7 @@ framebuffer_copy_result framebuffer_copy(rect source, rect target) {
            1);
   }
 
+  set_gc(&GC_MODE, gc_mode);
   return FRAMEBUFFER_COPY_SUCCESS;
 }
 
