@@ -211,7 +211,7 @@ framebuffer_copy_result framebuffer_copy(rect source, rect target) {
     return FRAMEBUFFER_COPY_ALIGNMENTS_DIFFERENT;
   }
 
-  set_gc(&GC_BIT_MASK, 0x00);
+  set_gc(&GC_BIT_MASK, 0xff);
 
   for (uint16_t row = 0; row < source.size.h; row++) {
     uint16_t source_y = row + source.y;
