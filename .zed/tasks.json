@@ -13,5 +13,12 @@
       "program": "sh"
     },
     "command": "dosbox-x -c \"mount c $(pwd)/bin\" -c 'c:' -c 'cwsdpmi.exe' -c 'mtchthre.exe' -nopromptfolder"
+  },
+  {
+    "label": "Run tests",
+    "shell": {
+      "program": "sh"
+    },
+    "command": "dosbox-x -c \"mount c $(pwd)/bin\" -c 'c:' -c 'cwsdpmi.exe' -c 'tests.exe' -nopromptfolder"
   }
 ]
