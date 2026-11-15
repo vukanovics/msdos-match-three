@@ -421,3 +421,23 @@ uint8_t read_pixel(uint16_t x, uint16_t y) {
          (__djgpp_conventional_base + VIDEO_MEMORY_START + memory_position), 1);
   return result;
 }
+
+void write_pixel(uint16_t x, uint16_t y, uint8_t color) {
+  uint16_t alignment = x % 4;
+  size_t memory_position = screen_pos_to_memory_pos(x - alignment, y);
+
+  // Writes are gated by the Sequencer Map Mask; enable only this pixel's plane
+  // and store the colour byte.
+  set_sc(&SC_MAP_MASK, (uint8_t)(1 << alignment));
+  memcpy(VIDEO_MEMORY_START + __djgpp_conventional_base + memory_position,
+         &color, 1);
+}
+
+void set_palette(const uint8_t *rgb, uint16_t count) {
+  for (uint16_t index = 0; index < count; index++) {
+    outportb(0x03c8, (uint8_t)index);
+    outportb(0x03c9, rgb[index * 3 + 0] >> 2);
+    outportb(0x03c9, rgb[index * 3 + 1] >> 2);
+    outportb(0x03c9, rgb[index * 3 + 2] >> 2);
+  }
+}

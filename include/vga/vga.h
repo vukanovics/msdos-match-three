@@ -262,4 +262,11 @@ framebuffer_copy_result framebuffer_copy(rect source, rect target);
 
 uint8_t read_pixel(uint16_t x, uint16_t y);
 
+void write_pixel(uint16_t x, uint16_t y, uint8_t color);
+
+///
+/// @brief Programs the VGA DAC palette from `count` 8-bit RGB triples.
+///
+void set_palette(const uint8_t *rgb, uint16_t count);
+
 #endif
