@@ -2,7 +2,7 @@
 bin/mtchthre.exe
 bin/tests.exe
 bin/CWSDPMI.SWP
-bin/tests.log
+bin/TESTS.LOG
 build
 compile_commands.json
 docs/
