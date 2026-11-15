@@ -220,85 +220,46 @@ framebuffer_copy_result framebuffer_copy(rect source, rect target) {
   set_gc(&GC_MODE, (gc_mode & ~0b00000011) | 0b00000001);
   set_gc(&GC_BIT_MASK, 0xff);
 
+  const uint8_t all_planes =
+      SC_MAP_MASK_PLANE_1 | SC_MAP_MASK_PLANE_2 | SC_MAP_MASK_PLANE_3 |
+      SC_MAP_MASK_PLANE_4;
+
+  uint16_t source_group = source.x / 4;
+  uint16_t target_group = target.x / 4;
+  uint16_t group_count = source.size.w / 4;
+
+  // With a non-zero alignment the rect spans one extra (partial) column
+  // group: the first group holds planes [alignment..3] and the last holds
+  // planes [0..alignment-1].
+  if (source_alignment != 0) {
+    group_count++;
+  }
+
   for (uint16_t row = 0; row < source.size.h; row++) {
     uint16_t source_y = row + source.y;
     uint16_t target_y = row + target.y;
 
-    // first we copy the potentially unaligned block
-    uint8_t mask = 0;
-    switch (source_alignment) {
-    case 0:
-      mask += SC_MAP_MASK_PLANE_1;
-      // fallthrough
-    case 1:
-      mask += SC_MAP_MASK_PLANE_2;
-      // fallthrough
-    case 2:
-      mask += SC_MAP_MASK_PLANE_3;
-      // fallthrough
-    case 3:
-      mask += SC_MAP_MASK_PLANE_4;
-      break;
+    for (uint16_t group = 0; group < group_count; group++) {
+      uint8_t mask = all_planes;
+      if (source_alignment != 0 && group == 0) {
+        mask = (uint8_t)((0x0f << source_alignment) & 0x0f);
+      } else if (source_alignment != 0 && group == group_count - 1) {
+        mask = (uint8_t)((1u << source_alignment) - 1u);
+      }
+
+      set_sc(&SC_MAP_MASK, mask);
+
+      uint16_t source_block_x = (uint16_t)((source_group + group) * 4);
+      uint16_t target_block_x = (uint16_t)((target_group + group) * 4);
+
+      uint16_t source_block =
+          screen_pos_to_memory_pos(source_block_x, source_y);
+      uint16_t target_block =
+          screen_pos_to_memory_pos(target_block_x, target_y);
+
+      memcpy(target_block + __djgpp_conventional_base + VIDEO_MEMORY_START,
+             source_block + __djgpp_conventional_base + VIDEO_MEMORY_START, 1);
     }
-
-    set_sc(&SC_MAP_MASK, mask);
-
-    uint16_t source_first_block_start =
-        screen_pos_to_memory_pos(source.x - source_alignment, source_y);
-
-    uint16_t target_first_block_start =
-        screen_pos_to_memory_pos(target.x - target_alignment, target_y);
-
-    memcpy(target_first_block_start + __djgpp_conventional_base +
-               VIDEO_MEMORY_START,
-           source_first_block_start + __djgpp_conventional_base +
-               VIDEO_MEMORY_START,
-           1);
-
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1 | SC_MAP_MASK_PLANE_2 |
-                             SC_MAP_MASK_PLANE_3 | SC_MAP_MASK_PLANE_4);
-    for (uint16_t column_group = 1; column_group < source.size.w / 4 - 1;
-         column_group++) {
-      uint16_t column_start = column_group * 4;
-      uint16_t source_block_start = screen_pos_to_memory_pos(
-          column_start + source.x - source_alignment, source_y);
-
-      uint16_t target_block_start = screen_pos_to_memory_pos(
-          column_start + target.x - target_alignment, target_y);
-      memcpy(
-          target_block_start + __djgpp_conventional_base + VIDEO_MEMORY_START,
-          source_block_start + __djgpp_conventional_base + VIDEO_MEMORY_START,
-          1);
-    }
-
-    mask = 0;
-    switch (source_alignment) {
-    case 0:
-      mask += SC_MAP_MASK_PLANE_4;
-      // fallthrough
-    case 1:
-      mask += SC_MAP_MASK_PLANE_3;
-      // fallthrough
-    case 2:
-      mask += SC_MAP_MASK_PLANE_2;
-      // fallthrough
-    case 3:
-      mask += SC_MAP_MASK_PLANE_1;
-      break;
-    }
-
-    set_sc(&SC_MAP_MASK, mask);
-    uint16_t source_last_block_start = screen_pos_to_memory_pos(
-        source.x - source_alignment + source.size.w - 4, source_y);
-
-    uint16_t target_last_block_start = screen_pos_to_memory_pos(
-        target.x - target_alignment + source.size.w - 4, target_y);
-
-    memcpy(target_last_block_start + __djgpp_conventional_base +
-               VIDEO_MEMORY_START,
-           source_last_block_start + __djgpp_conventional_base +
-               VIDEO_MEMORY_START,
-           1);
   }
 
   set_gc(&GC_MODE, gc_mode);
