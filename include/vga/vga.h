@@ -219,6 +219,7 @@ typedef struct gc_register_index_s gc_register_index;
 /// Typed indicies for the GC register.
 /// @{
 ///
+extern const gc_register_index GC_READ_MAP_SELECT;
 extern const gc_register_index GC_MISC;
 extern const gc_register_index GC_BIT_MASK;
 /// @}

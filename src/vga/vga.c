@@ -94,6 +94,7 @@ struct gc_register_index_s {
   size_t d;
 };
 
+const gc_register_index GC_READ_MAP_SELECT = {0x04};
 const gc_register_index GC_MISC = {0x06};
 const gc_register_index GC_BIT_MASK = {0x08};
 
@@ -439,26 +440,14 @@ uint8_t get_gc(const gc_register_index *index) {
 }
 
 uint8_t read_pixel(uint16_t x, uint16_t y) {
-  int alignment = x % 4;
+  uint16_t alignment = x % 4;
   size_t memory_position = screen_pos_to_memory_pos(x - alignment, y);
 
-  switch (alignment) {
-  case 0:
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_1);
-    break;
-  case 1:
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_2);
-    break;
-  case 2:
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_3);
-    break;
-  case 3:
-    set_sc(&SC_MAP_MASK, SC_MAP_MASK_PLANE_4);
-    break;
-  }
+  // CPU reads of planar VRAM return the plane selected by the Graphics
+  // Controller Read Map Select register; the Sequencer Map Mask only gates
+  // writes.
+  set_gc(&GC_READ_MAP_SELECT, (uint8_t)alignment);
 
-  // printf("would read at %d\n", memory_position);
-  // return 0;
   uint8_t result = 0;
   memcpy(&result,
          (__djgpp_conventional_base + VIDEO_MEMORY_START + memory_position), 1);
