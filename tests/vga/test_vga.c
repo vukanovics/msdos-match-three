@@ -3,6 +3,7 @@
 #include "sys/nearptr.h"
 #include "vga/planarized_image.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <vga/vga.h>
 
 int crtc_set_get_mono() {
@@ -111,3 +112,100 @@ cleanup:
 int copy_to_framebuffer_x_offset_1() { return 0; }
 int copy_to_framebuffer_x_offset_2() { return 0; }
 int copy_to_framebuffer_x_offset_3() { return 0; }
+
+// A pattern that varies in both x and y, so that a copy which lands on the
+// wrong row is detected (a columns-only pattern would not catch that).
+static image *new_framebuffer_copy_test_image(size test_size) {
+  uint8_t *data = malloc(test_size.w * test_size.h);
+  for (uint32_t y = 0; y < test_size.h; y++) {
+    for (uint32_t x = 0; x < test_size.w; x++) {
+      data[y * test_size.w + x] = (uint8_t)(x + y * test_size.w);
+    }
+  }
+  return image_new(data, test_size);
+}
+
+// Compares the framebuffer pixels at `target` against `expected`, starting at
+// column `expected_x` in the source image.
+static int framebuffer_matches_image(image *expected, uint16_t expected_x,
+                                     rect target) {
+  for (uint16_t x = 0; x < target.size.w; x++) {
+    for (uint16_t y = 0; y < target.size.h; y++) {
+      if (image_get_pixel(expected, expected_x + x, y) !=
+          read_pixel(target.x + x, target.y + y)) {
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
+// Places the test image at the aligned location (0, 0), then copies a sub-rect
+// starting at `source_x` to `target` and verifies every pixel. Keeping the
+// source aligned means a failure isolates framebuffer_copy() rather than the
+// (separately unfinished) unaligned path of copy_to_framebuffer().
+static int run_framebuffer_copy(uint16_t source_x, rect target) {
+  size test_size = {.h = 32, .w = 32};
+  image *source_image = new_framebuffer_copy_test_image(test_size);
+  planarized_image *planarized = planarized_image_new(source_image);
+
+  rect placement = {.x = 0, .y = 0, .size = test_size};
+  copy_to_framebuffer(planarized, placement);
+
+  rect source = {.x = source_x, .y = 0, .size = target.size};
+  if (framebuffer_copy(source, target) != FRAMEBUFFER_COPY_SUCCESS) {
+    return 0;
+  }
+
+  return framebuffer_matches_image(source_image, source_x, target);
+}
+
+int framebuffer_copy_x_offset_0() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 160, .y = 40, .size = {.h = 32, .w = 28}};
+  int result = run_framebuffer_copy(0, target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
+
+int framebuffer_copy_x_offset_1() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 161, .y = 40, .size = {.h = 32, .w = 28}};
+  int result = run_framebuffer_copy(1, target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
+
+int framebuffer_copy_x_offset_2() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 162, .y = 40, .size = {.h = 32, .w = 28}};
+  int result = run_framebuffer_copy(2, target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
+
+int framebuffer_copy_x_offset_3() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 163, .y = 40, .size = {.h = 32, .w = 28}};
+  int result = run_framebuffer_copy(3, target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}
+
+int framebuffer_copy_y_offset() {
+  switch_to_mode_x();
+  __djgpp_nearptr_enable();
+  rect target = {.x = 0, .y = 120, .size = {.h = 32, .w = 28}};
+  int result = run_framebuffer_copy(0, target);
+  __djgpp_nearptr_disable();
+  switch_to_mode_3();
+  return result;
+}

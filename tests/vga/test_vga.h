@@ -17,4 +17,10 @@ int copy_to_framebuffer_x_offset_1();
 int copy_to_framebuffer_x_offset_2();
 int copy_to_framebuffer_x_offset_3();
 
+int framebuffer_copy_x_offset_0();
+int framebuffer_copy_x_offset_1();
+int framebuffer_copy_x_offset_2();
+int framebuffer_copy_x_offset_3();
+int framebuffer_copy_y_offset();
+
 #endif

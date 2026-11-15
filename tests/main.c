@@ -37,6 +37,17 @@ int main(int argc, char **argv) {
   printf("copy_to_framebuffer_x_offset_3: %s\n",
          copy_to_framebuffer_x_offset_3() ? success() : failed());
 
+  printf("framebuffer_copy_x_offset_0: %s\n",
+         framebuffer_copy_x_offset_0() ? success() : failed());
+  printf("framebuffer_copy_x_offset_1: %s\n",
+         framebuffer_copy_x_offset_1() ? success() : failed());
+  printf("framebuffer_copy_x_offset_2: %s\n",
+         framebuffer_copy_x_offset_2() ? success() : failed());
+  printf("framebuffer_copy_x_offset_3: %s\n",
+         framebuffer_copy_x_offset_3() ? success() : failed());
+  printf("framebuffer_copy_y_offset: %s\n",
+         framebuffer_copy_y_offset() ? success() : failed());
+
   if (any_failed != 0) {
     printf("###############################################################\n");
     printf("######################SOME TESTS FAILED!#######################\n");
