@@ -1,5 +1,4 @@
 #include "common/image.h"
-#include "conio.h"
 #include "log.h"
 #include "sys/nearptr.h"
 #include "vga/planarized_image.h"
@@ -87,7 +86,6 @@ int copy_to_framebuffer_x_offset_0() {
   planarized_image *planarized_image = planarized_image_new(source);
   rect target = {.x = 0, .y = 0, .size = {.h = 32, .w = 32}};
   copy_to_framebuffer(planarized_image, target);
-  getch();
   char pixel_1 = read_pixel(0, 0);
   char pixel_2 = read_pixel(1, 1);
   char pixel_3 = read_pixel(2, 2);
