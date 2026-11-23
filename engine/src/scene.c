@@ -185,15 +185,18 @@ static bool add_sheet(scene *this, char *value, char *error, size_t error_size,
   return true;
 }
 
-static bool add_sprite(scene *this, char *value, char *error,
+static bool add_sprite(scene *this, char *value, bool animated, char *error,
                        size_t error_size, int line) {
+  const char *keyword = animated ? "animatedsprite" : "sprite";
   char *name = value;
   char *sheet_name = split_word(value);
   char *cel_text = sheet_name ? split_word(sheet_name) : NULL;
-  char *frames_text = cel_text ? split_word(cel_text) : NULL;
+  char *rest = cel_text ? split_word(cel_text) : NULL;
   if (!cel_text) {
     snprintf(error, error_size,
-             "line %d: 'sprite' needs 'sprite <name> <sheet> <cel>'", line);
+             "line %d: '%s' needs '%s <name> <sheet> <cel>%s'%s", line, keyword,
+             keyword, animated ? " <frames>" : "",
+             animated ? " [loop] [resident]" : "");
     return false;
   }
   if (*name == '$') {
@@ -245,24 +248,41 @@ static bool add_sprite(scene *this, char *value, char *error,
   }
 
   int frames = 1;
-  char *flag_text = frames_text ? split_word(frames_text) : NULL;
-  if (frames_text && (!parse_int(frames_text, &frames) || frames < 1)) {
-    snprintf(error, error_size, "line %d: sprite '%s' needs a frame count of 1 "
-                                "or more",
-             line, name);
-    return false;
-  }
-
+  bool loop = false;
   bool resident = false;
-  if (flag_text) {
-    if (strcmp(flag_text, "resident")) {
-      snprintf(error, error_size,
-               "line %d: sprite '%s' takes 'resident' or nothing after its "
-               "frame count, not '%s'",
-               line, name, flag_text);
+  if (animated) {
+    if (!rest) {
+      snprintf(error, error_size, "line %d: '%s' needs a frame count", line,
+               keyword);
       return false;
     }
-    resident = true;
+    char *flags = split_word(rest);
+    if (!parse_int(rest, &frames) || frames < 1) {
+      snprintf(error, error_size,
+               "line %d: sprite '%s' needs a frame count of 1 or more", line,
+               name);
+      return false;
+    }
+    while (flags && *flags) {
+      char *flag = flags;
+      flags = split_word(flags);
+      if (!strcmp(flag, "loop")) {
+        loop = true;
+      } else if (!strcmp(flag, "resident")) {
+        resident = true;
+      } else {
+        snprintf(error, error_size,
+                 "line %d: sprite '%s' takes 'loop' or 'resident' after its "
+                 "frame count, not '%s'",
+                 line, name, flag);
+        return false;
+      }
+    }
+  } else if (rest) {
+    snprintf(error, error_size,
+             "line %d: '%s' is one cel; use 'animatedsprite' for a run", line,
+             name);
+    return false;
   }
   if (cel + frames > this->sheet[sheet].cel_count) {
     snprintf(error, error_size,
@@ -278,6 +298,7 @@ static bool add_sprite(scene *this, char *value, char *error,
   sprite->sheet = sheet;
   sprite->cel = cel;
   sprite->frames = frames;
+  sprite->loop = loop;
   sprite->resident = resident;
   return true;
 }
@@ -294,7 +315,10 @@ static bool assign(scene *this, const char *key, char *value, char *error,
     return add_sheet(this, value, error, error_size, line);
   }
   if (!strcmp(key, "sprite")) {
-    return add_sprite(this, value, error, error_size, line);
+    return add_sprite(this, value, false, error, error_size, line);
+  }
+  if (!strcmp(key, "animatedsprite")) {
+    return add_sprite(this, value, true, error, error_size, line);
   }
 
   if (!strcmp(key, "scene.name")) {

@@ -1,23 +1,26 @@
 // Runs a scene and a compiled behaviour on the host, tick by tick, with no
 // emulator involved.
 //
-// The guest runs the same bytecode through the same vm.c, so this is a fast way
-// to check that a behaviour terminates, keeps its stack discipline and leaves
-// the world in states the renderer can draw - and to see the numbers behind a
-// behaviour's tuning without recording a demo.
+// The guest runs the same bytecode through the same vm.c and the same anim.c, so
+// this is a fast way to check that a behaviour terminates, keeps its stack
+// discipline and leaves the world in states the renderer can draw - and to see
+// the numbers behind a behaviour's tuning without recording a demo.
 //
 // Build and run from the project root:
 //
 //   gcc -O2 -std=c99 -I engine/include -o /tmp/behaviour_check \
-//       tools/behaviour_check.c engine/src/{scene,state,vm}.c
+//       tools/behaviour_check.c engine/src/{anim,scene,state,vm}.c
 //   /tmp/behaviour_check bin/MATCH3.SCN bin/MATCH3.BC
 //
-// The checks below are specific to match-three's glimmer pool; the driver around
-// them is the generic part.
+// The checks below know match-three's conventions - a gem's idle animation is
+// its kind plus six, and its glimmer is its kind - but the driver around them is
+// the generic part.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include "engine/anim.h"
 #include "engine/scene.h"
 #include "engine/slots.h"
 #include "engine/state.h"
@@ -25,7 +28,12 @@
 
 #define TICKS (60 * 90)
 #define BOARD_CELLS 100
-#define GLIMMER_SLOTS 4
+#define KINDS 6
+// Handles 0..5 are the glimmer runs and 6..11 the idle ones, one per kind.
+#define GLIMMER_BASE 6
+// The longest a glimmer should last: its 60 cels, a cel every four ticks, plus
+// the quantum an animation started mid-step can wait for.
+#define GLIMMER_LIMIT 245
 
 static uint8_t *read_file(const char *path, size_t *size) {
   FILE *file = fopen(path, "rb");
@@ -54,37 +62,38 @@ static uint8_t *read_file(const char *path, size_t *size) {
   return data;
 }
 
-static int handle_of(const world_state *state, int cell) {
-  return state->slot[cell * ENTITY_STRIDE + ENTITY_SPRITE];
-}
-
-// The keys a player would send to swap two cells, at the ticks given.
+// The keys a player would send to swap two cells. Swaps run often enough that
+// they overlap glimmer rolls, which is where the two used to collide over a
+// scratch slot.
 static int scripted_key(long tick, int *key) {
-  if (tick == 600) {
-    *key = 13; // pick
-    return 1;
-  }
-  if (tick == 602) {
-    *key = 77; // right
-    return 1;
-  }
-  if (tick == 604) {
-    *key = 13; // swap with the pick
-    return 1;
-  }
-  if (tick == 1800) {
-    *key = 80; // down
-    return 1;
-  }
-  if (tick == 1802) {
-    *key = 13;
-    return 1;
-  }
-  if (tick == 1804) {
-    *key = 13;
-    return 1;
+  static const int arrows[] = {77, 75, 80, 72};
+  for (long base = 600, at = 0; base <= 3600; base += 120, at++) {
+    if (tick == base) {
+      *key = 13; // pick
+      return 1;
+    }
+    if (tick == base + 2) {
+      *key = arrows[at % 4];
+      return 1;
+    }
+    if (tick == base + 4) {
+      *key = 13; // swap with the pick
+      return 1;
+    }
   }
   return 0;
+}
+
+static int handle_of(const world_state *state, int cell) {
+  return state->slot[cell * ENTITY_STRIDE + ENTITY_ANIMATION];
+}
+
+static int frame_of(const world_state *state, int cell) {
+  return state->slot[cell * ENTITY_STRIDE + ENTITY_FRAME];
+}
+
+static int visible_of(const world_state *state, int cell) {
+  return state->slot[cell * ENTITY_STRIDE + ENTITY_FLAGS] & ENTITY_VISIBLE;
 }
 
 int main(int argc, char **argv) {
@@ -120,10 +129,11 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  int count_slot = scene_slot_of(&description, "glimmer-count");
-  int cell0_slot = scene_slot_of(&description, "glimmer-cell0");
-  if (count_slot < 0 || cell0_slot < 0) {
-    printf("the scene has no glimmer pool\n");
+  int kind_slot = scene_slot_of(&description, "kind0");
+  int phase_slot = scene_slot_of(&description, "phase");
+  int dirty_slot = scene_slot_of(&description, "dirty");
+  if (kind_slot < 0 || phase_slot < 0 || dirty_slot < 0) {
+    printf("the scene is missing a slot this check needs\n");
     return 1;
   }
 
@@ -131,84 +141,159 @@ int main(int argc, char **argv) {
   long concurrent = 0;
   long same_kind = 0;
   long most = 0;
-  int previous = 0;
+  long glimmers_seen = 0;
+  long longest = 0;
+  long glimmer_started[BOARD_CELLS];
+  for (int cell = 0; cell < BOARD_CELLS; cell++) {
+    glimmer_started[cell] = -1;
+  }
 
   for (long tick = 0; tick < TICKS; tick++) {
-    int key;
-    if (scripted_key(tick, &key) && !vm_key(&machine, key)) {
-      printf("key: %s\n", machine.error ? machine.error : "unknown");
+    // Same order as the engine: step the cels, then input, then the tick.
+    if (!anim_advance(&description, &state, (uint32_t)tick, &machine)) {
+      printf("tick %ld: animation-end: %s\n", tick,
+             machine.error ? machine.error : "unknown");
       return 1;
     }
-
+    int key;
+    if (scripted_key(tick, &key) && !vm_key(&machine, key)) {
+      printf("tick %ld: key: %s\n", tick, machine.error ? machine.error : "unknown");
+      return 1;
+    }
     if (!vm_tick(&machine)) {
       printf("tick %ld: %s\n", tick, machine.error ? machine.error : "unknown");
       return 1;
     }
 
-    int count = state.slot[count_slot];
-    if (count < 0 || count > GLIMMER_SLOTS) {
-      printf("tick %ld: the pool holds %d entries\n", tick, count);
-      return 1;
-    }
-    if (count > previous) {
-      started += count - previous;
-    }
-    previous = count;
-    if (count > most) {
-      most = count;
-    }
-    if (count >= 2) {
-      concurrent++;
+    int glimmering = 0;
+    int kinds[BOARD_CELLS];
+    for (int cell = 0; cell < BOARD_CELLS; cell++) {
+      int handle = handle_of(&state, cell);
+      int frame = frame_of(&state, cell);
+      int kind = state.slot[kind_slot + cell];
+      int visible = visible_of(&state, cell);
+
+      if (handle < 0) {
+        if (visible) {
+          printf("tick %ld: cell %d has no animation but is visible\n", tick, cell);
+          return 1;
+        }
+        glimmer_started[cell] = -1;
+        continue;
+      }
+      if (handle >= description.sprite_count) {
+        printf("tick %ld: cell %d names animation %d of %d\n", tick, cell, handle,
+               description.sprite_count);
+        return 1;
+      }
+      if (kind < 0 || kind >= KINDS) {
+        printf("tick %ld: cell %d holds kind %d\n", tick, cell, kind);
+        return 1;
+      }
+
+      // What it is showing has to stay inside the run it names, which is the
+      // engine's job and the renderer trusts.
+      int frames = description.sprite[handle].frames;
+      if (frame < 0 || frame >= frames) {
+        printf("tick %ld: cell %d shows cel %d of an animation of %d\n", tick,
+               cell, frame, frames);
+        return 1;
+      }
+
+      if (handle < GLIMMER_BASE) {
+        // Glimmering: the handle is the kind, and a glimmer is only ever played
+        // on a gem that is on the board.
+        if (handle != kind) {
+          printf("tick %ld: cell %d glimmers as %d but holds kind %d\n", tick,
+                 cell, handle, kind);
+          return 1;
+        }
+        if (!visible) {
+          printf("tick %ld: cell %d glimmers while hidden\n", tick, cell);
+          return 1;
+        }
+        if (glimmer_started[cell] < 0) {
+          glimmer_started[cell] = tick;
+          started++;
+        } else if (tick - glimmer_started[cell] > longest) {
+          longest = tick - glimmer_started[cell];
+        }
+        if (tick - glimmer_started[cell] > GLIMMER_LIMIT) {
+          printf("tick %ld: cell %d has glimmered for %ld ticks\n", tick, cell,
+                 tick - glimmer_started[cell]);
+          return 1;
+        }
+        kinds[glimmering++] = kind;
+        continue;
+      }
+
+      // Idle: the handle is the kind plus the idle base.
+      if (handle != kind + GLIMMER_BASE) {
+        printf("tick %ld: cell %d idles as %d but holds kind %d\n", tick, cell,
+               handle, kind);
+        return 1;
+      }
+      if (!visible) {
+        printf("tick %ld: cell %d has an animation but is not visible\n", tick,
+               cell);
+        return 1;
+      }
+      if (glimmer_started[cell] >= 0) {
+        glimmers_seen++;
+        glimmer_started[cell] = -1;
+      }
     }
 
-    // Every entry names a board cell, and that cell is wearing a glimmer sprite.
-    int kinds[GLIMMER_SLOTS];
-    for (int i = 0; i < count; i++) {
-      int cell = state.slot[cell0_slot + i];
-      if (cell < 0 || cell >= BOARD_CELLS) {
-        printf("tick %ld: entry %d names cell %d\n", tick, i, cell);
-        return 1;
-      }
-      kinds[i] = handle_of(&state, cell);
-      if (kinds[i] < 0 || kinds[i] >= 6) {
-        printf("tick %ld: entry %d, cell %d, wears handle %d, not a glimmer\n",
-               tick, i, cell, kinds[i]);
-        return 1;
-      }
+    if (glimmering > most) {
+      most = glimmering;
     }
-    for (int a = 0; a < count; a++) {
-      for (int b = a + 1; b < count; b++) {
+    if (glimmering >= 2) {
+      concurrent++;
+    }
+    for (int a = 0; a < glimmering; a++) {
+      for (int b = a + 1; b < glimmering; b++) {
         if (kinds[a] == kinds[b]) {
           same_kind++;
         }
       }
     }
 
-    // Nothing outside the pool may be wearing a glimmer, because matching and
-    // swapping read sprite handles to decide what a gem is. A hidden cell is
-    // only legal while the board is not quiet.
-    for (int cell = 0; cell < BOARD_CELLS; cell++) {
-      int handle = handle_of(&state, cell);
-      int in_pool = 0;
-      for (int i = 0; i < count; i++) {
-        if (state.slot[cell0_slot + i] == cell) {
-          in_pool = 1;
+    // With the board settled, every gem has to be on its own cell. A gem that
+    // ended up somewhere else leaves a hole and sits on top of another one, and
+    // nothing would ever move it back, because a fall only goes down.
+    if (state.slot[phase_slot] == 0 && state.slot[dirty_slot] == 0) {
+      for (int cell = 0; cell < BOARD_CELLS; cell++) {
+        if (handle_of(&state, cell) < 0) {
+          continue;
         }
-      }
-      if (in_pool || handle == -1) {
-        continue;
-      }
-      if (handle < 6 || handle >= 12) {
-        printf("tick %ld: cell %d wears handle %d outside the pool\n", tick,
-               cell, handle);
-        return 1;
+        int want_x = (40 + 24 * (cell % 10)) << 16;
+        int want_y = (24 * (cell / 10)) << 16;
+        int x = state.slot[cell * ENTITY_STRIDE + ENTITY_X];
+        int y = state.slot[cell * ENTITY_STRIDE + ENTITY_Y];
+        if (x != want_x || y != want_y) {
+          printf("tick %ld: cell %d is at (%d,%d), not (%d,%d)\n", tick, cell,
+                 x >> 16, y >> 16, want_x >> 16, want_y >> 16);
+          return 1;
+        }
       }
     }
   }
 
-  printf("ok %d ticks, %ld glimmers started, at most %ld at once, %ld ticks "
-         "with two or more, %ld tick-pairs of one kind, checksum %08lx\n",
-         TICKS, started, most, concurrent, same_kind,
+  int hidden = 0;
+  for (int cell = 0; cell < BOARD_CELLS; cell++) {
+    if (handle_of(&state, cell) < 0) {
+      hidden++;
+    }
+  }
+  if (hidden != 0) {
+    printf("%d cells are still empty after %d ticks\n", hidden, TICKS);
+    return 1;
+  }
+
+  printf("ok %d ticks, %ld glimmers started and %ld finished, at most %ld at "
+         "once, longest %ld ticks, %ld ticks with two or more, %ld tick-pairs "
+         "of one kind, checksum %08lx\n",
+         TICKS, started, glimmers_seen, most, longest, concurrent, same_kind,
          (unsigned long)state_checksum(&state, scene_slot_count(&description)));
   return 0;
 }

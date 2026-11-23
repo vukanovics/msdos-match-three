@@ -179,8 +179,7 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
 }
 
 void render_frame(const scene *scene, sprite_set *source,
-                  const world_state *state, uint32_t frame,
-                  size_t page_base) {
+                  const world_state *state, size_t page_base) {
   uint8_t *vram = video_memory();
   uint32_t start = clock_us();
 
@@ -193,20 +192,22 @@ void render_frame(const scene *scene, sprite_set *source,
     if (!(slots[ENTITY_FLAGS] & ENTITY_VISIBLE)) {
       continue;
     }
-    int handle = slots[ENTITY_SPRITE];
+    int handle = slots[ENTITY_ANIMATION];
     if (handle < 0 || handle >= source->anim_count) {
       continue;
     }
 
-    // The sprite is an animation: the frame counter, less the tick it started
-    // on, picks the cel. A sprite of one frame ignores all of it.
+    // The world says which cel to show; the engine has already stepped it. A
+    // cel number out of range would only come from a program writing the slot
+    // itself, so clamp rather than let the blitter read past the run.
     const sprite_anim *anim = &source->anim[handle];
-    int32_t since = (int32_t)frame - slots[ENTITY_ANIM_START];
-    if (since < 0) {
-      since = 0;
+    int frame = slots[ENTITY_FRAME];
+    if (frame < 0) {
+      frame = 0;
+    } else if (frame >= anim->frames) {
+      frame = anim->frames - 1;
     }
-    uint32_t step = (uint32_t)since / (uint32_t)scene->animation_ticks;
-    int cel = anim->first_cel + (int)(step % (uint32_t)anim->frames);
+    int cel = anim->first_cel + frame;
 
     int x = slots[ENTITY_X] >> ENTITY_FIXED_SHIFT;
     int y = slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT;

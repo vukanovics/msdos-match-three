@@ -2,24 +2,26 @@
 #define ENGINE_SLOTS_H_INCLUDED
 
 // The engine's one built-in idea about the world: an ordered pool of entities,
-// each of which is a sprite at a position. The pool occupies the first
-// entity_count * ENTITY_STRIDE slots, so entity e owns the slots starting at
-// e * ENTITY_STRIDE. Anything else the game needs is a named slot declared by
-// the scene, which follow the pool.
+// each of which is an animation at a position, playing a cel. The pool occupies
+// the first entity_count * ENTITY_STRIDE slots, so entity e owns the slots
+// starting at e * ENTITY_STRIDE. Anything else the game needs is a named slot
+// declared by the scene, which follow the pool.
 //
 // Nothing here knows what a tile, a cursor or a board is.
 
 #define ENTITY_STRIDE 5
 
-#define ENTITY_SPRITE 0
+// A handle into the scene's sprite table. A sprite of one cel is a still; a
+// bigger one is an animation, and the engine steps it.
+#define ENTITY_ANIMATION 0
 #define ENTITY_X 1
 #define ENTITY_Y 2
 #define ENTITY_FLAGS 3
 
-// The tick at which the entity's current animation began. The renderer works
-// out which frame that means from the frame counter, so an animation is never
-// part of the world state - only the moment it started is.
-#define ENTITY_ANIM_START 4
+// Which cel of that animation is showing. The engine owns this: it steps it once
+// every scene->animation_ticks and, for a run that does not loop, calls the
+// behaviour's on-animation-end when the last cel is reached.
+#define ENTITY_FRAME 4
 
 #define ENTITY_VISIBLE 0x01
 

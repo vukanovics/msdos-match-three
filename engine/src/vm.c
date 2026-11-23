@@ -2,10 +2,10 @@
 
 #include <string.h>
 
-// Bytecode format: magic "BC02", u16 slot count, u16 reserved, u32 init offset,
-// u32 tick offset, u32 key offset, u32 code size, then the code. All values
-// little endian.
-#define HEADER_SIZE 24
+// Bytecode format: magic "BC03", u16 slot count, u16 reserved, u32 init offset,
+// u32 tick offset, u32 key offset, u32 animation-end offset, u32 code size, then
+// the code. All values little endian.
+#define HEADER_SIZE 28
 #define OP_PUSH 0x01
 #define OP_DUP 0x02
 #define OP_DROP 0x03
@@ -82,13 +82,13 @@ bool vm_load(vm *this, const uint8_t *bytes, size_t size, int32_t *slots,
              uint16_t slot_count, uint32_t seed) {
   memset(this, 0, sizeof(*this));
 
-  if (size < HEADER_SIZE || memcmp(bytes, "BC02", 4) != 0) {
+  if (size < HEADER_SIZE || memcmp(bytes, "BC03", 4) != 0) {
     this->error = "not a behaviour program";
     return false;
   }
 
   uint16_t compiled_slots = read_u16(bytes + 4);
-  uint32_t code_size = read_u32(bytes + 20);
+  uint32_t code_size = read_u32(bytes + 24);
 
   if (compiled_slots != slot_count) {
     this->error = "behaviour was compiled for a different slot layout";
@@ -104,6 +104,7 @@ bool vm_load(vm *this, const uint8_t *bytes, size_t size, int32_t *slots,
   this->init_entry = read_u32(bytes + 8);
   this->tick_entry = read_u32(bytes + 12);
   this->key_entry = read_u32(bytes + 16);
+  this->animation_end_entry = read_u32(bytes + 20);
   this->slots = slots;
   this->slot_count = slot_count;
   this->random_state = seed ? seed : 1u;
@@ -443,4 +444,8 @@ bool vm_tick(vm *this) { return run(this, this->tick_entry, 0, false); }
 
 bool vm_key(vm *this, int32_t key) {
   return run(this, this->key_entry, key, true);
+}
+
+bool vm_animation_end(vm *this, int32_t entity) {
+  return run(this, this->animation_end_entry, entity, true);
 }

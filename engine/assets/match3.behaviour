@@ -5,10 +5,19 @@
 # lives in the scene's slot table; @name reads a slot and !name writes one, while
 # bare '@' and '!' take the slot index from the stack and '&name' pushes it.
 #
-# The engine knows nothing about boards: it has an entity pool, and each entity
-# is a sprite, an x, a y, a flag word and the tick its animation began.
-# Everything below - the grid, the cursor, the falling, the glimmer - is built
-# from that.
+# The engine knows nothing about boards. It has an entity pool, and each entity
+# is an animation at a position, showing a cel:
+#
+#   slot 0   the animation handle
+#   slot 1   x, Q16.16
+#   slot 2   y, Q16.16
+#   slot 3   flags: bit 0 visible, bit 1 marked for clearing
+#   slot 4   which cel of the animation is showing
+#
+# The engine steps the cel of every entity once every animation.ticks frames. A
+# looping run wraps round; a run that does not loop stops on its last cel and the
+# engine calls on-animation-end with the entity index, so "play this once" is
+# just "set the animation and the cel to 0" - the end takes care of itself.
 #
 #   entity 0..99   board cells, row * 10 + column
 #   entity 100     cursor box
@@ -19,12 +28,9 @@
 # of that, a cell's y is not always row * cell - mid-animation it is wherever
 # the tile it holds really is.
 #
-# Positions are Q16.16, so a pixel is written as (pixels * 65536).
-#
-# Animations are not part of the world: the engine derives the cel from the tick
-# an animation began and the frame counter. So "play this animation now" is
-# "write the current tick", and the only animation state in the slot table is
-# that start tick. That is also why the clock below has to live in the state.
+# What a cell holds is its kind, kept beside the pool. Matching compares kinds,
+# not animations: an animation is what a gem looks like, and a gem that is
+# glimmering looks briefly different without being a different gem.
 
 # 24 * 65536, one cell in fixed point.
 def cell
@@ -53,14 +59,26 @@ def above-board
   15728640
 end
 
-# Slots per entity. This is ENTITY_STRIDE in the engine, and the behaviour has
-# to agree with it because it addresses the pool arithmetically.
+# Slots per entity, and the offset of each field within them. The stride is
+# ENTITY_STRIDE in the engine, and the behaviour has to agree with it because it
+# addresses the pool arithmetically.
 def stride
   5
 end
 
-# The offset of the animation start within an entity's slots.
-def anim
+def slot-x
+  1
+end
+
+def slot-y
+  2
+end
+
+def slot-flags
+  3
+end
+
+def slot-frame
   4
 end
 
@@ -79,13 +97,27 @@ def ticks
   4
 end
 
-# Ticks one glimmer lasts: the whole glimmer animation, played once.
+# Cels in one idle run.
+def idle-frames
+  60
+end
+
+# Spacing between cells' starting cels. Anything coprime with the run length
+# walks every cel before repeating, and a stride like this scatters them:
+# neighbouring cells start far apart in the run instead of setting up a ripple
+# across the board.
+def phase-stride
+  37
+end
+
+# Ticks one glimmer lasts: the whole glimmer run, played once.
 def glimmer-length
   240
 end
 
-# Ticks between rolls, at least this many plus the spread. Shorter than a glimmer,
-# so runs overlap and two gems of a kind can be glimmering at once.
+# Ticks between glimmer rolls, at least this many plus the spread. Shorter than a
+# glimmer, so runs overlap and more than one gem - and more than one of a kind -
+# can be glimmering at once.
 def glimmer-gap
   60
 end
@@ -94,22 +126,19 @@ def glimmer-gap-spread
   120
 end
 
-# 6 + kind: the idle sprites are handles 6..11, and glimmer0..5 are handles 0..5,
-# so a gem's kind is its idle handle less six and its glimmer handle less six
-# again.
+# 6 + kind: the idle sprites are handles 6..11 and glimmer0..5 are 0..5, so a gem
+# of kind k is idle at handle 6 + k and glimmers at handle k.
 def idle-base
   6
 end
 
-# Slot index of the velocity array, so it can be indexed at run time.
-def vel-base
-  &velocity0
+# Slot indices of the arrays the behaviour keeps, for indexing at run time.
+def kind-base
+  &kind0
 end
 
-# The same for the glimmer pool. Its size is fixed by the scene; every 'for 4'
-# and the '3' that counts down through it below have to agree with it.
-def glimmer-base
-  &glimmer-cell0
+def vel-base
+  &velocity0
 end
 
 # Slot base of the board cell at (row, column) on the stack.
@@ -122,125 +151,44 @@ def abs
   dup 0 < [ neg ] when
 end
 
-# Cels in one idle animation.
-def idle-frames
-  60
+# The kind entity i holds.
+def kind-of
+  kind-base + @
 end
 
-# Spacing between neighbours' phases, in cels. Anything coprime with the loop
-# length walks every phase before repeating, and a stride like this scatters
-# them: neighbouring cells land far apart in the animation instead of forming a
-# ripple across the board.
-def phase-stride
-  37
-end
-
-# Give entity i an animation start such that its idle animation is part way
-# through, offset by its own cell. Every gem therefore animates on its own
-# timing rather than in step with the rest.
-def setIdlePhase
-  dup phase-stride * idle-frames mod ticks * neg over stride * anim + !
-end
-
-# Turn entity i's sprite into its glimmer sprite and start the glimmer now.
+# Show animation h from cel n. i h cel -> i
 #
-# Only an idle gem converts. A cell rolled for twice by accident keeps the run it
-# already has, rather than stepping its handle twice into nothing.
-def setGlimmer
-  dup stride * @                          # i, sprite
-  dup idle-base >=
-  [ idle-base - over stride * !
-    @time over stride * anim + ! ]
-  [ drop ]
-  ifelse
+# The animation slot is the first field, so it needs no offset. n has to go
+# through a temp: i is three deep by the time both stores are made.
+def play
+  !temp-a
+  over stride * !
+  @temp-a over stride * slot-frame + !
 end
 
-# Turn a glimmering entity's sprite back into idle, on its own phase. Doing this
-# to a gem that is already idle is harmless, which is what makes stopping the
-# pool twice safe.
-def setIdle
-  dup stride * @                          # i, sprite
-  dup 0 >= over idle-base < and
-  [ idle-base + over stride * ! ]
-  [ drop ]
-  ifelse
-  setIdlePhase
+# Give entity i its idle animation, from the first cel.
+def play-idle
+  dup kind-of idle-base + 0 play
 end
 
-# Stop every running glimmer.
-#
-# A glimmer is only ever alive while the board is quiet. Anything that reads
-# sprite handles to decide something - matching, swapping - would otherwise see
-# a gem wearing a different sprite than its kind, so every transition out of the
-# quiet state stops the pool first.
-def glimmer-stop
-  for 4 [
-    dup @glimmer-count <
-    [ dup glimmer-base + @ setIdle drop ] when
-    drop
-  ]
-  0 !glimmer-count
+# Give entity i its idle animation, from the cel that its cell starts on. Used
+# when a gem appears, so the board does not breathe in step.
+def play-idle-here
+  dup phase-stride * idle-frames mod
+  over kind-of idle-base + swap play
 end
 
-# The tick entry j finishes on.
-def glimmer-deadline                     # j -> deadline
-  glimmer-base + @ stride * anim + @ glimmer-length +
-end
-
-# Drop entry j by moving the last one into its place. Leaves j on the stack.
-def glimmer-remove                       # j -> j
-  @glimmer-count 1 - !temp-c
-  @temp-c glimmer-base + @ !temp-d
-  @temp-d over glimmer-base + !
-  @temp-c !glimmer-count
-end
-
-# End entry j if its animation has played out. Leaves j on the stack.
-def glimmer-end-at                       # j -> j
-  dup !temp-a
-  @temp-a glimmer-base + @ !temp-b
-  @temp-b 0 >=
-  @temp-a glimmer-deadline @time <=
-  and
-  [ @temp-b setIdle drop
-    @temp-a glimmer-remove drop ] when
-end
-
-# Retire the glimmers that have played out. Descending, because an entry moved
-# down into a hole has already been looked at, so one pass settles the pool.
-def glimmer-expire
-  for 4 [
-    3 swap -                             # j counts down 3..0
-    dup @glimmer-count <
-    [ glimmer-end-at ] when
-    drop
-  ]
-end
-
-# Roll for another glimmer while the pool has room and the wait is over.
-def glimmer-roll
-  @glimmer-count 4 <
-  @time @next-roll >=
-  and
-  [ roll-glimmer ] when
-end
-
-def roll-glimmer
-  random 100 mod !temp-a                  # temp-a is the cell
-  @temp-a
-  @glimmer-count glimmer-base +
-  !                                       # the pool is not full, see above
-  @glimmer-count 1 + !glimmer-count
-  @temp-a setGlimmer drop
-  @time glimmer-gap + random glimmer-gap-spread mod + !next-roll
+# Give entity i its glimmer animation, from the first cel.
+def play-glimmer
+  dup kind-of 0 play
 end
 
 # Move the cursor entity to the cell the cursor globals point at.
 def place-cursor
   @cursor-column cell * origin-x +          # x
   @cursor-row cell *                      # x y
-  cursor-base 2 + !                       # store y
-  cursor-base 1 + !                       # store x
+  cursor-base slot-y + !                  # store y
+  cursor-base slot-x + !                  # store x
 end
 
 def move-up
@@ -265,22 +213,23 @@ def pick
   @cursor-column !picked-column
   @cursor-column cell * origin-x +          # x
   @cursor-row cell *                      # x y
-  picked-base 2 + !                       # store y
-  picked-base 1 + !                       # store x
-  1 picked-base 3 + !                     # visible
+  picked-base slot-y + !                  # store y
+  picked-base slot-x + !                  # store x
+  1 picked-base slot-flags + !            # visible
 end
 
 def unpick
   -1 !picked-row
   -1 !picked-column
-  0 picked-base 3 + !                     # hidden
+  0 picked-base slot-flags + !            # hidden
 end
 
-# Exchange the sprites and animation starts of the picked and cursor cells. The
-# values are read into temp slots first, because both writes need both reads.
+# Exchange what the picked and cursor cells hold: the animation, the cel it is
+# showing, and the kind. Not the positions - the two entities slide, and where
+# they end up is what the swap is.
 #
-# The animation goes with the gem, not with the cell: gems of one kind are all on
-# the same cel, which is what lets the renderer keep them in its cel cache.
+# A gem therefore keeps its own animation and its own place in the run when it
+# changes cells, which is the point of holding both.
 def swap-tiles
   @cursor-row @cursor-column at !temp-a           # slot base of the cursor cell
   @picked-row @picked-column at !temp-b           # slot base of the picked cell
@@ -288,10 +237,14 @@ def swap-tiles
   @temp-b @ !temp-d
   @temp-c @temp-b !
   @temp-d @temp-a !
-  @temp-a anim + @ !temp-c
-  @temp-b anim + @ !temp-d
-  @temp-c @temp-b anim + !
-  @temp-d @temp-a anim + !
+  @temp-a slot-frame + @ !temp-c
+  @temp-b slot-frame + @ !temp-d
+  @temp-c @temp-b slot-frame + !
+  @temp-d @temp-a slot-frame + !
+  @temp-a stride / kind-base + @ !temp-c
+  @temp-b stride / kind-base + @ !temp-d
+  @temp-c @temp-b stride / kind-base + !
+  @temp-d @temp-a stride / kind-base + !
 end
 
 # Only neighbours may be swapped.
@@ -301,67 +254,77 @@ def adjacent
   + 1 =
 end
 
-# Slide the two cells towards each other; the sprites change hands at the end.
+# Slide the two cells towards each other; what they hold changes hands at the
+# end.
 #
-# The glimmer is stopped first, so the handles this reads are idle ones and the
-# gem does not carry a half-played glimmer to its new cell.
+# The two slot bases go in named slots rather than the scratch ones because they
+# have to survive until the slide finishes, and a glimmer may be rolled or an
+# animation may end in between.
 def swap-start
-  glimmer-stop
-  @cursor-row @cursor-column at !temp-a
-  @picked-row @picked-column at !temp-b
+  @cursor-row @cursor-column at !swap-a
+  @picked-row @picked-column at !swap-b
   @picked-column @cursor-column - swap-step * !step-x
   @picked-row @cursor-row - swap-step * !step-y
-  0 picked-base 3 + !                     # hide the picked box while it slides
+  0 picked-base slot-flags + !            # hide the picked box while it slides
   10 !timer
   1 !phase
 end
 
 def swap-tick
-  @temp-a 1 + @ @step-x + @temp-a 1 + !
-  @temp-a 2 + @ @step-y + @temp-a 2 + !
-  0 @step-x - @temp-b 1 + @ + @temp-b 1 + !
-  0 @step-y - @temp-b 2 + @ + @temp-b 2 + !
+  @swap-a slot-x + @ @step-x + @swap-a slot-x + !
+  @swap-a slot-y + @ @step-y + @swap-a slot-y + !
+  0 @step-x - @swap-b slot-x + @ + @swap-b slot-x + !
+  0 @step-y - @swap-b slot-y + @ + @swap-b slot-y + !
   @timer 1 - !timer
   @timer 0 <= [ swap-finish ] when
 end
 
 def swap-finish
-  @cursor-column cell * origin-x + @temp-a 1 + !
-  @cursor-row cell * @temp-a 2 + !
-  @picked-column cell * origin-x + @temp-b 1 + !
-  @picked-row cell * @temp-b 2 + !
+  @cursor-column cell * origin-x + @swap-a slot-x + !
+  @cursor-row cell * @swap-a slot-y + !
+  @picked-column cell * origin-x + @swap-b slot-x + !
+  @picked-row cell * @swap-b slot-y + !
   swap-tiles
   unpick
   1 !dirty
   0 !phase
 end
 
-# If the three cells starting at i, stepping by s *slots*, hold the same tile,
+# Does cell j hold a gem of the same kind as the one in temp-a, and hold one at
+# all?
+def same-kind
+  dup stride * @ 0 >=
+  swap kind-of @temp-a =
+  and
+end
+
+# Mark the three cells starting at i, stepping by the number of cells in temp-b.
+def mark-run
+  3 over stride * slot-flags + !
+  3 over @temp-b + stride * slot-flags + !
+  3 over @temp-b 2 * + stride * slot-flags + !
+  1 !matches
+end
+
+# If the three cells starting at i, stepping by step cells, hold the same kind,
 # mark all three. Leaves i on the stack so the caller can go on using it.
-#
-# i is an entity index, so its sprite is at slot i * stride; s is already a slot
-# stride (stride across, ten strides down) because that is what is added to it.
 def mark3
-  !temp-b                                 # temp-b is the slot stride
-  dup stride * !temp-d                    # temp-d is the slot base of i
-  @temp-d @ !temp-a                       # temp-a is the tile
-  @temp-d @temp-b + @ @temp-a =           # i a
-  @temp-d 2 @temp-b * + @ @temp-a =       # i a b
-  and @temp-a 0 >= and                    # i matched
-  [
-    3 @temp-d 3 + !
-    3 @temp-d @temp-b + 3 + !
-    3 @temp-d 2 @temp-b * + 3 + !
-    1 !matches
-  ] when
+  !temp-b                                   # temp-b is the step, in cells
+  dup !temp-c                               # temp-c is i
+  dup kind-of !temp-a                       # temp-a is the kind
+  @temp-c same-kind
+  @temp-c @temp-b + same-kind
+  @temp-c @temp-b 2 * + same-kind
+  and and
+  [ mark-run ] when
 end
 
 # A cell that is part of a run has flags 3: visible, and marked.
 def match-pass
   0 !matches
   for 100 [
-    dup 10 mod 8 < [ stride mark3 ] when
-    dup 10 / 8 < [ 10 stride * mark3 ] when
+    dup 10 mod 8 < [ 1 mark3 ] when
+    dup 10 / 8 < [ 10 mark3 ] when
     drop
   ]
 end
@@ -369,24 +332,25 @@ end
 # Hide every marked cell.
 def clear-pass
   for 100 [
-    dup stride * 3 + @ 3 =
+    dup stride * slot-flags + @ 3 =
     [
       -1 over stride * !
-      1 over stride * 3 + !
+      1 over stride * slot-flags + !
     ] when
     drop
   ]
 end
 
 # Move the tile above an empty cell down into it, remembering where it came from
-# so the fall animates from there. The animation start travels with the gem, for
+# so the fall animates from there. What the gem looks like travels with it, for
 # the same reason it does in a swap.
 def pull-down
   dup 10 - !temp-a                        # temp-a is the cell above
   vel-base over + !temp-d                 # temp-d is velocity[i]
-  @temp-a stride * @ over stride * !      # sprite
-  @temp-a stride * anim + @ over stride * anim + !  # animation
-  @temp-a stride * 2 + @ over stride * 2 + !        # y
+  @temp-a stride * @ over stride * !                        # animation
+  @temp-a stride * slot-frame + @ over stride * slot-frame + !  # cel
+  @temp-a kind-of over kind-base + !                        # kind
+  @temp-a stride * slot-y + @ over stride * slot-y + !      # y
   vel-base @temp-a + @ !temp-c            # temp-c is velocity[i - 10]
   @temp-c @temp-d !
   0 vel-base @temp-a + !
@@ -415,12 +379,12 @@ def refill-pass
   for 100 [
     dup stride * @ 0 <
     [
-      random 6 mod idle-base + over stride * !     # a new kind, idle
-      setIdlePhase
-      dup 10 / cell * above-board - over stride * 2 + !
+      random 6 mod over kind-base + !                 # a new kind
+      play-idle-here
+      dup 10 / cell * above-board - over stride * slot-y + !
       vel-base over + !temp-d
       0 @temp-d !
-      1 over stride * 3 + !
+      1 over stride * slot-flags + !
     ] when
     drop
   ]
@@ -430,7 +394,7 @@ end
 def fall-entity
   dup 10 / cell * !temp-b                 # temp-b is where it comes to rest
   vel-base over + !temp-d                 # temp-d is velocity[i]
-  dup stride * 2 + @ !temp-c              # temp-c is y
+  dup stride * slot-y + @ !temp-c         # temp-c is y
   @temp-c @temp-b < [
     @temp-d @ gravity + @temp-d !
     @temp-c @temp-d @ + !temp-c
@@ -440,7 +404,7 @@ def fall-entity
     ] when
     1 !moving
   ] when
-  @temp-c over stride * 2 + !
+  @temp-c over stride * slot-y + !
 end
 
 def fall-tick
@@ -468,20 +432,40 @@ def idle-tick
   ] when
 end
 
+# Roll for a glimmer. Any cell may be picked, including one that is already
+# glimmering - it is simply left alone, so several can run at once and two gems
+# of a kind can be glimmering together.
+def roll-glimmer
+  random 100 mod
+  dup stride * @ idle-base >=
+    [ play-glimmer drop ]
+    [ drop ]
+  ifelse
+  @time glimmer-gap + random glimmer-gap-spread mod + !next-roll
+end
+
 def tick
   @time 1 + !time
-  # The glimmer is cosmetic, so the pool is simply emptied while anything else is
-  # going on: quiet means idle and already matched.
-  @phase 0 =
-  @dirty 0 =
-  and
-    [ glimmer-expire glimmer-roll ]
-    [ glimmer-stop ]
-  ifelse
+  @time @next-roll >= [ roll-glimmer ] when
   @phase 0 = [ idle-tick ] when
   @phase 1 = [ swap-tick ] when
   @phase 2 = [ clear-tick ] when
   @phase 3 = [ fall-tick ] when
+end
+
+# The engine calls this when an entity's run reaches its last cel, with the
+# entity as the argument. A glimmer is played once, so this is where the gem
+# goes back to its idle animation, from the beginning.
+#
+# No scratch slots: this runs between ticks, when a swap may be part way through.
+def on-animation-end
+  dup stride * @                          # entity, animation
+  dup 0 >=
+  over idle-base <
+  and
+    [ drop play-idle drop ]
+    [ drop drop ]
+  ifelse
 end
 
 # Build the world: lay out the board, then put the boxes in place. Called once.
@@ -489,16 +473,16 @@ end
 # The index of each cell is pushed by 'for'; the body leaves nothing behind.
 def init
   for 100 [
-    random 6 mod idle-base + over stride * !             # sprite
-    setIdlePhase
-    dup 10 mod cell * origin-x + over stride * 1 + !     # x
-    dup 10 / cell * over stride * 2 + !                 # y
-    1 over stride * 3 + !                               # visible
+    random 6 mod over kind-base + !                 # kind
+    play-idle-here
+    dup 10 mod cell * origin-x + over stride * slot-x + !
+    dup 10 / cell * over stride * slot-y + !
+    1 over stride * slot-flags + !
     drop
   ]
-  $cursor cursor-base !         # cursor sprite
-  $picked picked-base !         # picked sprite
-  1 cursor-base 3 + !           # cursor visible
+  $cursor cursor-base !         # cursor animation
+  $picked picked-base !         # picked animation
+  1 cursor-base slot-flags + !  # cursor visible
   place-cursor
 end
 

@@ -432,6 +432,7 @@ bool sprite_set_load(sprite_set *this, const scene *scene, char *error,
     const scene_sprite *sprite = &scene->sprite[i];
     this->anim[i].first_cel = sheet_base[sprite->sheet] + sprite->cel;
     this->anim[i].frames = sprite->frames;
+    this->anim[i].loop = sprite->loop;
   }
 
   // Decode what the scene asked to keep, now rather than on first use: the cels

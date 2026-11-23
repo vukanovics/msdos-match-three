@@ -54,7 +54,7 @@ const OP_RET: u8 = 0x45;
 const OP_HALT: u8 = 0x46;
 const OP_JZ: u8 = 0x47;
 
-const MAGIC: &[u8; 4] = b"BC02";
+const MAGIC: &[u8; 4] = b"BC03";
 // Must match ENTITY_STRIDE in engine/include/engine/slots.h: the compiler bakes
 // the entity pool's size into every slot index it emits.
 const ENTITY_STRIDE: i32 = 5;
@@ -150,7 +150,8 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
             continue;
         }
 
-        if key == "sprite" {
+        if key == "sprite" || key == "animatedsprite" {
+            let animated = key == "animatedsprite";
             let name = parts.next().ok_or("'sprite' needs a name")?.to_string();
             let sheet_name = parts.next().ok_or("'sprite' needs a sheet")?.to_string();
             let cel: i32 = parts
@@ -167,11 +168,17 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
             if sprites.iter().any(|(existing, _)| existing == &name) {
                 return Err(format!("duplicate sprite '{name}'"));
             }
-            let frames: i32 = match parts.next() {
-                Some(text) => text
+            // Only an animated sprite names a frame count; later tokens say how
+            // it plays ('loop') and how it is loaded ('resident'), and do not
+            // change the layout the compiler bakes in.
+            let frames: i32 = if animated {
+                parts
+                    .next()
+                    .ok_or("'animatedsprite' needs a frame count")?
                     .parse()
-                    .map_err(|_| "'sprite' needs a whole frame count")?,
-                None => 1,
+                    .map_err(|_| "'animatedsprite' needs a whole frame count")?
+            } else {
+                1
             };
             if frames < 1 {
                 return Err(format!("sprite '{name}' needs a frame count of 1 or more"));
@@ -640,8 +647,13 @@ fn main() {
             compiler
                 .compile_entry("on-key")
                 .map(|key| (init, tick, key))
+        })
+        .and_then(|(init, tick, key)| {
+            compiler
+                .compile_entry("on-animation-end")
+                .map(|end| (init, tick, key, end))
         });
-    let (init, tick, key) = match entries {
+    let (init, tick, key, animation_end) = match entries {
         Ok(entries) => entries,
         Err(error) => fail(error),
     };
@@ -656,6 +668,7 @@ fn main() {
     output.extend_from_slice(&init.to_le_bytes());
     output.extend_from_slice(&tick.to_le_bytes());
     output.extend_from_slice(&key.to_le_bytes());
+    output.extend_from_slice(&animation_end.to_le_bytes());
     output.extend_from_slice(&code_size.to_le_bytes());
     output.extend_from_slice(&compiler.code);
 

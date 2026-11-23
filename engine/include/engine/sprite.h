@@ -72,12 +72,13 @@ typedef struct {
 ///
 /// @brief A named sprite: the first of its cels, and how many it runs through.
 ///
-/// One frame is a still sprite, so a plain sprite and an animation are the same
-/// thing as far as the engine is concerned.
+/// One cel is a still, so a plain sprite and an animation are the same thing as
+/// far as the engine is concerned; only an animation is stepped.
 ///
 typedef struct {
   int first_cel;
   int frames;
+  bool loop;
 } sprite_anim;
 
 typedef struct {

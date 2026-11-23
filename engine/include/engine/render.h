@@ -33,7 +33,7 @@ bool render_init(const scene *scene, const sprite_set *sprites, char *error,
 /// @brief Draws one frame of @p state into the page at @p page_base.
 ///
 void render_frame(const scene *scene, sprite_set *sprites,
-                  const world_state *state, uint32_t frame,
+                  const world_state *state,
                   size_t page_base);
 
 ///

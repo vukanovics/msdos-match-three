@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sys/nearptr.h>
 
+#include "engine/anim.h"
 #include "engine/clock.h"
 #include "engine/diag.h"
 #include "engine/render.h"
@@ -130,6 +131,17 @@ static void log_state(const vm *machine, const world_state *state,
   diag_line(line);
 }
 
+// Animation is world state: the engine steps every entity's cel and tells the
+// behaviour when a run that does not loop reaches its last cel. The stepping
+// itself lives in anim.c, which needs nothing but the scene, so the host check
+// runs the same code the guest does.
+static void advance_animations(const scene *scene, world_state *state,
+                               uint32_t frame, vm *behaviour) {
+  if (!anim_advance(scene, state, frame, behaviour)) {
+    report_fault(false, behaviour, "animation-end");
+  }
+}
+
 int engine_main(const char *scene_path, const char *behaviour_path,
                 demo_mode mode, const char *demo_path) {
   scene description;
@@ -199,7 +211,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   // that is not being displayed (the mode set leaves the display on page 0), so
   // even the first frame is presented complete.
   size_t page_index = 0;
-  render_frame(&description, sprites, &state, 0, render_page_size());
+  render_frame(&description, sprites, &state, render_page_size());
   set_display_start(render_page_size());
 
   uint32_t frame = 0;
@@ -214,6 +226,12 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   while (running) {
     uint8_t keys[DEMO_KEYS_PER_FRAME];
     int key_count = 0;
+
+    // Step the cels before anything reads the world, so the tick, the demo hash
+    // and the frame that is drawn all describe the same instant.
+    if (!behaviour_faulted) {
+      advance_animations(&description, &state, frame, &behaviour);
+    }
 
     if (the_demo.mode == DEMO_PLAY) {
       // Only the engine's own keys come from the keyboard during playback.
@@ -278,7 +296,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
 
     uint32_t render_start = clock_us();
     size_t page = page_index * render_page_size();
-    render_frame(&description, sprites, &state, frame, page);
+    render_frame(&description, sprites, &state, page);
     uint32_t draw_us = clock_us() - render_start;
 
     set_display_start(page);

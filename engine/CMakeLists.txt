@@ -1,6 +1,7 @@
 add_executable(match3
   src/main.c
   src/engine.c
+  src/anim.c
   src/clock.c
   src/scene.c
   src/state.c

@@ -18,7 +18,9 @@
 ///
 /// Three entry points, matching the engine's evaluation model: @c init builds
 /// the world once, @c tick advances it by one fixed step, and @c key applies one
-/// input event.
+/// input event. @c animation_end is called with the entity index when a
+/// non-looping animation reaches its last cel, which is how a program can say
+/// "play this once, then go back to idle" without tracking it itself.
 ///
 typedef struct {
   const uint8_t *code;
@@ -26,6 +28,7 @@ typedef struct {
   uint32_t init_entry;
   uint32_t tick_entry;
   uint32_t key_entry;
+  uint32_t animation_end_entry;
 
   int32_t *slots;
   uint16_t slot_count;
@@ -65,6 +68,11 @@ bool vm_tick(vm *this);
 /// @brief Runs the key entry point with @p key as its argument.
 ///
 bool vm_key(vm *this, int32_t key);
+
+///
+/// @brief Runs the animation-end entry point with @p entity as its argument.
+///
+bool vm_animation_end(vm *this, int32_t entity);
 
 ///
 /// @brief The generator state, so replays can be checked as a whole.
