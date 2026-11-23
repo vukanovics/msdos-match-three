@@ -12,6 +12,11 @@
 // Per-plane bytes for one screen page.
 #define PAGE_SIZE ((SCREEN_WIDTH * SCREEN_HEIGHT) / 4)
 
+// The flip writes only the start address high byte, which is safe only while
+// every page base is a multiple of 256 (see set_display_start). Fail the build
+// rather than the display if the mode or page layout ever changes.
+typedef char page_size_must_be_a_multiple_of_256[(PAGE_SIZE % 256 == 0) ? 1 : -1];
+
 // Bytes per scanline in one plane.
 #define ROW_BYTES (SCREEN_WIDTH / 4)
 

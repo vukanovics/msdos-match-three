@@ -28,40 +28,32 @@
 #define KEY_F2 0x3c
 
 static void probe_display(void) {
-  // Records the edges of the retrace and display-enable bits so the vertical
-  // timing can be read out of the log instead of guessed at.
+  // Counts how often each status bit is set over ~200 ms. Counting rather than
+  // watching for edges matters: a retrace pulse can be far shorter than the
+  // polling interval, and an edge watcher samples right past it.
   char line[192];
   uint32_t started = clock_us();
-  uint32_t previous = clock_us();
-  int retrace = get_input_status_1().vertical_retrace ? 1 : 0;
-  int enabled = get_input_status_1().display_enable ? 1 : 0;
-  int edges = 0;
+  uint32_t samples = 0;
+  uint32_t retrace_high = 0;
+  uint32_t blank_high = 0;
 
-  snprintf(line, sizeof(line), "probe t %lu retrace %d enable %d",
-           (unsigned long)(previous - started), retrace, enabled);
-  diag_line(line);
-
-  while (edges < 12) {
+  while ((int32_t)(clock_us() - started) < 200000) {
     input_status_1_register status = get_input_status_1();
-    int now_retrace = status.vertical_retrace ? 1 : 0;
-    int now_enabled = status.display_enable ? 1 : 0;
-    uint32_t now = clock_us();
-
-    if (now_retrace != retrace || now_enabled != enabled) {
-      snprintf(line, sizeof(line),
-               "probe t %lu retrace %d enable %d (was %d %d)",
-               (unsigned long)(now - started), now_retrace, now_enabled,
-               retrace, enabled);
-      diag_line(line);
-      retrace = now_retrace;
-      enabled = now_enabled;
-      edges++;
+    if (status.vertical_retrace) {
+      retrace_high++;
     }
-    if ((int32_t)(now - started) > 300000) { // give up after 300 ms
-      diag_line("probe timed out");
-      break;
+    if (status.display_enable) {
+      blank_high++;
     }
+    samples++;
   }
+
+  snprintf(line, sizeof(line),
+           "probe samples %lu retrace_high %lu blank_high %lu over %lu us",
+           (unsigned long)samples, (unsigned long)retrace_high,
+           (unsigned long)blank_high,
+           (unsigned long)(clock_us() - started));
+  diag_line(line);
 }
 
 int main(void) {
@@ -158,10 +150,9 @@ int main(void) {
       }
     }
 
-    // Pace the loop. On real hardware the retrace wait inside the flip already
-    // holds us to the refresh rate and this never spins; it matters where the
-    // display does not gate us, such as an emulator that never raises the sync
-    // bits, where the loop would otherwise free run well above the refresh.
+    // Pace the loop to the target rate. The flip no longer blocks, so without
+    // this the loop free runs at whatever the machine can draw, rendering frames
+    // the display never shows.
     uint32_t frame_end = frame_start + FRAME_US;
     while ((int32_t)(clock_us() - frame_end) < 0) {
     }

@@ -113,19 +113,14 @@ size_t screen_pos_to_memory_pos(uint16_t x, uint16_t y) {
 void set_display_start(size_t base) {
   uint16_t address = (uint16_t)(base / PAGE_ADDRESS_UNIT);
 
-  // The CRTC latches the start address at the beginning of vertical retrace, so
-  // programming it at any point during the frame takes effect at the next
-  // retrace without tearing: the switch itself always happens during blanking.
-  //
-  // Nothing here polls the display status register. Its timing is the one thing
-  // that cannot be trusted across implementations - DOSBox derives it from its
-  // own frame clock, never raises vertical sync for this mode, and reports
-  // blanking for long stretches - so waiting on it produced flips at a
-  // different phase every frame. With three pages the page being drawn has been
-  // off screen for at least a frame regardless of when the flip is latched,
-  // which removes the need to know the phase at all.
+  // Only the upper byte is written. Page bases are multiples of 256 (see
+  // PAGE_ADDRESS_UNIT and the page size in the engine), so the lower byte is
+  // always zero and never changes. That matters more than it looks: writing the
+  // pair across a retrace can leave the CRTC with one page's high byte and
+  // another's low byte for a frame, which jumps the whole image. Abrash calls
+  // this out in chapter 44 and prescribes exactly this workaround for pages at
+  // multiples of 256, needing no wait for the display to be active.
   set_crtc(&CRTC_START_ADDRESS_HIGH, (uint8_t)(address >> 8));
-  set_crtc(&CRTC_START_ADDRESS_LOW, (uint8_t)(address & 0xff));
 }
 
 copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
