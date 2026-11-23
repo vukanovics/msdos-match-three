@@ -1,4 +1,7 @@
 .cache
+bin/match3.exe
+bin/MATCH3.SCN
+bin/ENGINE.LOG
 bin/mtchthre.exe
 bin/tests.exe
 bin/CWSDPMI.SWP

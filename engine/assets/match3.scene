@@ -1,0 +1,20 @@
+# Match-three scene.
+#
+# Parsed when the scene loads. Every non-blank line is "key value"; anything
+# after '#' is a comment. Unknown keys fail at load time.
+
+scene.name match3
+
+board.columns 10
+board.rows 10
+board.tile 24
+
+colors.background 253
+colors.cursor 254
+colors.picked 255
+
+sprites.tiles.count 6
+sprites.tiles.width 24
+sprites.tiles.height 24
+
+world.seed 4231
