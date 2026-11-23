@@ -119,8 +119,28 @@ void set_display_start(size_t base) {
   // pair across a retrace can leave the CRTC with one page's high byte and
   // another's low byte for a frame, which jumps the whole image. Abrash calls
   // this out in chapter 44 and prescribes exactly this workaround for pages at
-  // multiples of 256, needing no wait for the display to be active.
+  // multiples of 256, which needs no wait for the display to be active either.
   set_crtc(&CRTC_START_ADDRESS_HIGH, (uint8_t)(address >> 8));
+
+  // The CRTC latches the start address at the beginning of vertical retrace, so
+  // wait for the edge that applies it before the caller draws into the page
+  // that is about to stop being displayed.
+  //
+  // Wait for a rising edge, not a level: if the write landed while the pulse was
+  // already high it takes effect at the following pulse, which is the same edge
+  // this wait observes. Both loops are bounded because a display that reports no
+  // sync must not hang the engine; missing a pulse then costs a frame, not the
+  // machine.
+  for (uint32_t spins = 0; spins < 200000; spins++) {
+    if (!get_input_status_1().vertical_retrace) {
+      break;
+    }
+  }
+  for (uint32_t spins = 0; spins < 200000; spins++) {
+    if (get_input_status_1().vertical_retrace) {
+      break;
+    }
+  }
 }
 
 copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,

@@ -13,12 +13,12 @@
 #define FRAME_US (1000000u / TARGET_FPS)
 #define MAX_CATCH_UP_US (4u * FRAME_US)
 
-// Three pages so the page being drawn has been off screen for at least a frame
-// by the time we touch it. With two pages the flip has to be timed exactly
-// against vertical retrace, and any phase error shows up as tearing; a third
-// page removes that coupling. Each page is 19,200 bytes per plane, so three of
-// them use 57,600 of the 65,536 bytes available in each plane.
-#define PAGE_COUNT 3
+// Two pages, flipped at vertical sync. The flip waits for the retrace edge that
+// latches the new start address, so by the time it returns the other page is no
+// longer displayed and is safe to draw. The panel starts out as 2 not 3
+// deliberately: three pages would allow an unpaced flip but cost 19,200 bytes
+// per plane of the sprite space.
+#define PAGE_COUNT 2
 
 #define SCENE_PATH "MATCH3.SCN"
 #define LOG_PATH "ENGINE.LOG"
@@ -77,12 +77,13 @@ int main(void) {
   diag_open(LOG_PATH);
   diag_state(&scene_description, &state);
 
-  // Put a finished frame on screen before entering the loop, so the first thing
-  // the display shows is never a page that is still being drawn.
+  // Put a finished frame on screen before entering the loop. Draw into the page
+  // that is not being displayed (the mode set leaves the display on page 0), so
+  // even the first frame is presented complete.
   size_t page_index = 0;
-  render_frame(&scene_description, &state, 0);
-  set_display_start(0);
-  page_index = 1;
+  render_frame(&scene_description, &state, render_page_size());
+  set_display_start(render_page_size());
+  page_index = 0;
 
   uint32_t frame = 0;
   uint32_t last = clock_us();
@@ -150,12 +151,9 @@ int main(void) {
       }
     }
 
-    // Pace the loop to the target rate. The flip no longer blocks, so without
-    // this the loop free runs at whatever the machine can draw, rendering frames
-    // the display never shows.
-    uint32_t frame_end = frame_start + FRAME_US;
-    while ((int32_t)(clock_us() - frame_end) < 0) {
-    }
+    // Pace is supplied by the flip: it returns at the retrace that latches the
+    // new page, so the loop runs at the display refresh rate while drawing fits
+    // inside one refresh period, and simply free runs when it does not.
   }
 
   diag_state(&scene_description, &state);
