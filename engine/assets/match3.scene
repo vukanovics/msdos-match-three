@@ -9,28 +9,33 @@
 
 scene.name match3
 
-# Sprite sheets on disk, written by tools/png_to_spr.py. The count is declared
+# Sprite sheets on disk, written by tools/build_gems.py. The count is declared
 # here so the behaviour compiler can hand every sprite a number without reading
 # the art; the loader checks each file against it.
-sheet tiles TILES.SPR 6
+sheet blue BLUE.SPR 120
+sheet cyan CYAN.SPR 120
+sheet green GREEN.SPR 120
+sheet purple PURPLE.SPR 120
+sheet red RED.SPR 120
+sheet yellow YELLOW.SPR 120
 sheet ui UI.SPR 2
 
 # Named sprites. The behaviour program refers to these as $name, and the handle
-# is the cel's place in the flat list of all sheets, in declaration order.
-sprite tile0 tiles 0
-sprite tile1 tiles 1
-sprite tile2 tiles 2
-sprite tile3 tiles 3
-sprite tile4 tiles 4
-sprite tile5 tiles 5
+# is the sprite's position here, in declaration order. The trailing number is
+# how many cels the sprite animates through; one means a still picture.
+sprite tile0 blue 0 120
+sprite tile1 cyan 0 120
+sprite tile2 green 0 120
+sprite tile3 purple 0 120
+sprite tile4 red 0 120
+sprite tile5 yellow 0 120
 sprite cursor ui 0
 sprite picked ui 1
 
-# Entity pool. The behaviour program builds the board in it:
-#    0.. 99   board tiles, row * 10 + column
-#  100       selection cursor
-#  101       picked tile highlight
-#  102, 103  spare, for objects created while playing
+# The art is rendered at 60 frames per second and every second frame is kept, so
+# holding each one for two 60 Hz ticks plays it at the speed it was authored.
+animation.ticks 2
+
 entities.count 104
 
 color.background 253

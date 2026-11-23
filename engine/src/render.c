@@ -56,6 +56,47 @@ static void clear_page(uint8_t *vram, size_t base, uint8_t colour) {
 // The cel is pre-shifted, so the phase is just the low two bits of x; an
 // opaque cel copies whole rows, and a cel with holes writes only the bytes that
 // hold one of its pixels.
+// One row of a cel that does not fill its plane's extent: it starts or ends
+// short, or has a hole. Only the rounded corners of a shape land here.
+static inline __attribute__((always_inline)) void
+blit_narrow_row(uint8_t *vram, size_t page_base, int y,
+                            const sprite_plane *source, int stride, int column,
+                            int left, int right, int row) {
+  int first = source->first + source->row_left[row];
+  int last = source->last - source->row_right[row];
+  if (first < left) {
+    first = left;
+  }
+  if (last > right) {
+    last = right;
+  }
+  if (first > last) {
+    return;
+  }
+
+  const uint8_t *source_row = source->data + (size_t)row * (size_t)stride;
+  uint8_t *destination = vram + page_base +
+                         (size_t)(y + row) * ROW_BYTES + (size_t)column;
+  if (source->row_masked[row]) {
+    const uint8_t *mask = source->present + (size_t)row * (size_t)stride;
+    for (int i = first; i <= last; i++) {
+      if (mask[i]) {
+        destination[i] = source_row[i];
+      }
+    }
+    return;
+  }
+  for (int i = first; i <= last; i++) {
+    destination[i] = source_row[i];
+  }
+}
+
+// Mode X writes are gated by the sequencer map mask, and changing that mask is
+// by far the most expensive part of a blit. Grouping the work by plane means
+// four mask changes per sprite rather than one per scanline.
+//
+// The cel is decoded for one alignment, and the middle of it is a plain run of
+// bytes per row, so that part copies with no per-row bookkeeping at all.
 static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
   if (x <= -cel->width || x >= SCREEN_WIDTH) {
     return;
@@ -64,12 +105,9 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
     return;
   }
 
-  int phase = x & 3;
-  // Floor division, so that x == 4 * column + phase holds for negative x too.
+  // Floor division, so that x == 4 * column + (x & 3) holds for negative x too.
   int column = x >= 0 ? (x >> 2) : -((-x + 3) >> 2);
 
-  // Row and byte extents are clipped once, outside the plane and row loops: a
-  // hundred sprites a frame makes per-row bookkeeping the dominant cost.
   int first_row = y < 0 ? -y : 0;
   int last_row = cel->height - 1;
   if (y + last_row >= SCREEN_HEIGHT) {
@@ -85,70 +123,64 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
   int stride = cel->bytes_per_row;
 
   for (int plane = 0; plane < 4; plane++) {
-    const sprite_plane *source = &cel->plane[phase][plane];
-    const uint8_t *data = source->data;
-    const uint8_t *present = source->present;
-    set_sc(&SC_MAP_MASK, (uint8_t)(1 << plane));
-
-    if (!present) {
-      // Opaque: the byte extent is the same on every row, so it is computed
-      // once here and the row loop below is just an address and a copy.
-      int first = source->first;
-      int last = source->last;
-      if (first < left) {
-        first = left;
-      }
-      if (last > right) {
-        last = right;
-      }
-      if (first > last) {
-        continue;
-      }
-      int count = last - first + 1;
-
-      for (int row = first_row; row <= last_row; row++) {
-        const uint8_t *source_row = data + row * stride + first;
-        uint8_t *destination = vram + page_base +
-                               (size_t)(y + row) * ROW_BYTES +
-                               (size_t)(column + first);
-        for (int i = 0; i < count; i++) {
-          destination[i] = source_row[i];
-        }
-      }
+    const sprite_plane *source = &cel->plane[plane];
+    int first = source->first;
+    int last = source->last;
+    if (first > last) {
       continue;
     }
+    if (first < left) {
+      first = left;
+    }
+    if (last > right) {
+      last = right;
+    }
+    if (first > last) {
+      continue;
+    }
+    int count = last - first + 1;
 
-    // A cel with holes needs its extent per row, and only writes the bytes that
-    // hold one of its own pixels.
-    for (int row = first_row; row <= last_row; row++) {
-      int first = source->row_first[row];
-      int last = source->row_last[row];
-      if (first < left) {
-        first = left;
-      }
-      if (last > right) {
-        last = right;
-      }
-      if (first > last) {
-        continue;
-      }
+    int band_first = source->band_first;
+    int band_last = source->band_last;
+    if (band_first < first_row) {
+      band_first = first_row;
+    }
+    if (band_last > last_row) {
+      band_last = last_row;
+    }
 
-      const uint8_t *source_row = data + row * stride + first;
-      const uint8_t *mask = present + row * stride + first;
-      uint8_t *destination = vram + page_base +
-                             (size_t)(y + row) * ROW_BYTES +
-                             (size_t)(column + first);
-      for (int i = 0; i <= last - first; i++) {
-        if (mask[i]) {
-          destination[i] = source_row[i];
+    set_sc(&SC_MAP_MASK, (uint8_t)(1 << plane));
+
+    for (int row = first_row; row < band_first; row++) {
+      blit_narrow_row(vram, page_base, y, source, stride, column, left, right,
+                      row);
+    }
+
+    if (band_first <= band_last) {
+      const uint8_t *from = source->data + (size_t)band_first * (size_t)stride +
+                            (size_t)first;
+      uint8_t *to = vram + page_base +
+                    (size_t)(y + band_first) * ROW_BYTES +
+                    (size_t)(column + first);
+      for (int row = band_first; row <= band_last; row++) {
+        for (int i = 0; i < count; i++) {
+          to[i] = from[i];
         }
+        from += stride;
+        to += ROW_BYTES;
       }
+    }
+
+    for (int row = band_last + 1; row <= last_row; row++) {
+      blit_narrow_row(vram, page_base, y, source, stride, column, left, right,
+                      row);
     }
   }
 }
 
-void render_frame(const scene *scene, const sprite_set *source,
-                  const world_state *state, size_t page_base) {
+void render_frame(const scene *scene, sprite_set *source,
+                  const world_state *state, uint32_t frame,
+                  size_t page_base) {
   uint8_t *vram = video_memory();
   uint32_t start = clock_us();
 
@@ -161,15 +193,29 @@ void render_frame(const scene *scene, const sprite_set *source,
     if (!(slots[ENTITY_FLAGS] & ENTITY_VISIBLE)) {
       continue;
     }
-    int cel = slots[ENTITY_SPRITE];
-    if (cel < 0 || cel >= source->count) {
+    int handle = slots[ENTITY_SPRITE];
+    if (handle < 0 || handle >= source->anim_count) {
       continue;
     }
-    blit(&source->cel[cel], slots[ENTITY_X] >> ENTITY_FIXED_SHIFT,
-         slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT, page_base);
+
+    // The sprite is an animation: the frame counter picks the cel, and a sprite
+    // of one frame simply ignores it.
+    const sprite_anim *anim = &source->anim[handle];
+    uint32_t step = frame / (uint32_t)scene->animation_ticks;
+    int cel = anim->first_cel + (int)(step % (uint32_t)anim->frames);
+
+    int x = slots[ENTITY_X] >> ENTITY_FIXED_SHIFT;
+    int y = slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT;
+    const sprite_cel *decoded = sprite_cel_at(source, cel, x & 3);
+    if (!decoded) {
+      continue;
+    }
+    blit(decoded, x, y, page_base);
   }
   uint32_t after_sprites = clock_us();
 
   last_stats.clear_us = after_clear - start;
   last_stats.sprites_us = after_sprites - after_clear;
+  last_stats.decodes = source->decodes;
+  source->decodes = 0;
 }

@@ -19,7 +19,12 @@ install(TARGETS match3 RUNTIME DESTINATION bin)
 # The scene and the sprite sheet are data, not code: they are installed next to
 # the executable so they can be edited and reloaded without rebuilding.
 install(FILES assets/match3.scene DESTINATION bin RENAME MATCH3.SCN)
-install(FILES assets/tiles.spr DESTINATION bin RENAME TILES.SPR)
+install(FILES assets/gem_blue.spr DESTINATION bin RENAME BLUE.SPR)
+install(FILES assets/gem_cyan.spr DESTINATION bin RENAME CYAN.SPR)
+install(FILES assets/gem_green.spr DESTINATION bin RENAME GREEN.SPR)
+install(FILES assets/gem_purple.spr DESTINATION bin RENAME PURPLE.SPR)
+install(FILES assets/gem_red.spr DESTINATION bin RENAME RED.SPR)
+install(FILES assets/gem_yellow.spr DESTINATION bin RENAME YELLOW.SPR)
 install(FILES assets/ui.spr DESTINATION bin RENAME UI.SPR)
 
 # The behaviour language is compiled on the host, so type, name and termination

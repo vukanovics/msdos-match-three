@@ -165,30 +165,44 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
             if sprites.iter().any(|(existing, _)| existing == &name) {
                 return Err(format!("duplicate sprite '{name}'"));
             }
-            // Sheets have to be declared first, as in the engine's loader, so
-            // the handle can be computed here and an error lands on this line.
-            let mut base = 0;
-            let mut found = None;
-            for (sheet, count) in &sheets {
-                if sheet == &sheet_name {
-                    found = Some(*count);
-                    break;
-                }
-                base += count;
+            let frames: i32 = match parts.next() {
+                Some(text) => text
+                    .parse()
+                    .map_err(|_| "'sprite' needs a whole frame count")?,
+                None => 1,
+            };
+            if frames < 1 {
+                return Err(format!(
+                    "sprite '{name}' needs a frame count of 1 or more"
+                ));
             }
-            let count = found.ok_or_else(|| {
-                format!(
-                    "unknown sheet '{sheet_name}' (declare sheets before the \
-                     sprites that use them)"
-                )
-            })?;
+            let count = sheets
+                .iter()
+                .find(|(sheet, _)| sheet == &sheet_name)
+                .map(|(_, count)| *count)
+                .ok_or_else(|| {
+                    format!(
+                        "unknown sheet '{sheet_name}' (declare sheets before the \
+                         sprites that use them)"
+                    )
+                })?;
             if cel < 0 || cel >= count {
                 return Err(format!(
                     "sheet '{sheet_name}' has 0..{} cels, not {cel}",
                     count - 1
                 ));
             }
-            sprites.push((name, (base + cel) as u32));
+            if cel + frames > count {
+                return Err(format!(
+                    "sprite '{name}' runs to cel {}, past the {count} cels of \
+                     sheet '{sheet_name}'",
+                    cel + frames
+                ));
+            }
+            // A handle is the sprite's position in this table, not a cel
+            // number, so the program never needs to know how cels are laid out.
+            let handle = sprites.len() as u32;
+            sprites.push((name, handle));
             continue;
         }
 

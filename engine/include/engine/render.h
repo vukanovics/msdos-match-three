@@ -15,6 +15,7 @@
 typedef struct {
   uint32_t clear_us;
   uint32_t sprites_us;
+  uint32_t decodes;
 } render_stats;
 
 void render_last_stats(render_stats *stats);
@@ -31,8 +32,9 @@ bool render_init(const scene *scene, const sprite_set *sprites, char *error,
 ///
 /// @brief Draws one frame of @p state into the page at @p page_base.
 ///
-void render_frame(const scene *scene, const sprite_set *sprites,
-                  const world_state *state, size_t page_base);
+void render_frame(const scene *scene, sprite_set *sprites,
+                  const world_state *state, uint32_t frame,
+                  size_t page_base);
 
 ///
 /// @brief Offset, in per-plane bytes, of the second display page.

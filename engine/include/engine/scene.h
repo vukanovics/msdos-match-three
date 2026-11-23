@@ -15,7 +15,7 @@
 // The engine's sprite capacity is whatever the scene is allowed to ask for, so
 // these are the only place the limits are written down.
 #define SCENE_MAX_SHEETS 8
-#define SCENE_MAX_CELS 128
+#define SCENE_MAX_CELS 1024
 #define SCENE_MAX_SPRITES 64
 
 #define SCENE_MAX_SLOTS \
@@ -50,14 +50,15 @@ typedef struct {
 ///
 /// @brief A sprite the scene names, resolved to a sheet and a cel.
 ///
-/// The behaviour program refers to these as $name. Handles are assigned by
-/// walking the sheets in declaration order, so a handle is stable, flat, and
-/// known at compile time.
+/// The behaviour program refers to these as $name, and a handle is simply the
+/// sprite's position in this table, so it is stable and known at compile time.
+/// A sprite of more than one frame animates through consecutive cels.
 ///
 typedef struct {
   char name[SCENE_NAME_MAX];
   int sheet;
-  int cel;
+  int cel;    // first cel in that sheet
+  int frames; // cels the animation runs through; 1 for a still sprite
 } scene_sprite;
 
 ///
@@ -80,6 +81,10 @@ typedef struct {
   scene_sheet sheet[SCENE_MAX_SHEETS];
   int sprite_count;
   scene_sprite sprite[SCENE_MAX_SPRITES];
+  // Ticks each animation frame is held for. The source art is 60 frames per
+  // second and every second frame is kept, so at 60 ticks a frame is held for
+  // two ticks and the animation plays at its authored speed.
+  int animation_ticks;
 } scene;
 
 ///

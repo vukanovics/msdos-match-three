@@ -193,7 +193,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   // that is not being displayed (the mode set leaves the display on page 0), so
   // even the first frame is presented complete.
   size_t page_index = 0;
-  render_frame(&description, sprites, &state, render_page_size());
+  render_frame(&description, sprites, &state, 0, render_page_size());
   set_display_start(render_page_size());
 
   uint32_t frame = 0;
@@ -252,21 +252,27 @@ int engine_main(const char *scene_path, const char *behaviour_path,
       }
     }
 
+    uint32_t tick_start = clock_us();
     if (!behaviour_faulted) {
       run_program(vm_tick(&behaviour), &behaviour, &state, &description,
                   "tick");
     }
+    uint32_t tick_us = clock_us() - tick_start;
 
-    uint32_t hash = state_checksum(&state, scene_slot_count(&description));
-    if (the_demo.mode == DEMO_RECORD) {
-      demo_record_hash(&the_demo, frame, hash);
-    } else if (the_demo.mode == DEMO_PLAY) {
-      demo_check_hash(&the_demo, frame, hash);
+    // Only a demo needs a checksum per frame; hashing the world costs a fifth
+    // of a millisecond and running without one is the normal case.
+    if (the_demo.mode != DEMO_OFF) {
+      uint32_t hash = state_checksum(&state, scene_slot_count(&description));
+      if (the_demo.mode == DEMO_RECORD) {
+        demo_record_hash(&the_demo, frame, hash);
+      } else {
+        demo_check_hash(&the_demo, frame, hash);
+      }
     }
 
     uint32_t render_start = clock_us();
     size_t page = page_index * render_page_size();
-    render_frame(&description, sprites, &state, page);
+    render_frame(&description, sprites, &state, frame, page);
     uint32_t draw_us = clock_us() - render_start;
 
     set_display_start(page);
@@ -280,11 +286,12 @@ int engine_main(const char *scene_path, const char *behaviour_path,
 
       char line[192];
       snprintf(line, sizeof(line),
-               "frame %lu draw_us %lu clear_us %lu sprites_us %lu flip_us %lu "
-               "tick %lu pit %u clock_us %lu",
+               "frame %lu draw_us %lu clear_us %lu sprites_us %lu decodes %lu "
+               "flip_us %lu tick_us %lu pit %u clock_us %lu",
                (unsigned long)frame, (unsigned long)draw_us,
                (unsigned long)stats.clear_us, (unsigned long)stats.sprites_us,
-               (unsigned long)(frame_us - draw_us),
+               (unsigned long)stats.decodes,
+               (unsigned long)(frame_us - draw_us), (unsigned long)tick_us,
                (unsigned long)clock_raw_tick(),
                (unsigned)clock_raw_counter(), (unsigned long)clock_us());
       diag_line(line);

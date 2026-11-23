@@ -11,6 +11,7 @@ static void set_defaults(scene *this) {
   strcpy(this->name, "untitled");
   this->background = 0;
   this->seed = 1;
+  this->animation_ticks = 1;
 }
 
 static bool parse_int(const char *value, int *result) {
@@ -189,6 +190,7 @@ static bool add_sprite(scene *this, char *value, char *error,
   char *name = value;
   char *sheet_name = split_word(value);
   char *cel_text = sheet_name ? split_word(sheet_name) : NULL;
+  char *frames_text = cel_text ? split_word(cel_text) : NULL;
   if (!cel_text) {
     snprintf(error, error_size,
              "line %d: 'sprite' needs 'sprite <name> <sheet> <cel>'", line);
@@ -242,11 +244,27 @@ static bool add_sprite(scene *this, char *value, char *error,
     return false;
   }
 
+  int frames = 1;
+  if (frames_text && (!parse_int(frames_text, &frames) || frames < 1)) {
+    snprintf(error, error_size, "line %d: sprite '%s' needs a frame count of 1 "
+                                "or more",
+             line, name);
+    return false;
+  }
+  if (cel + frames > this->sheet[sheet].cel_count) {
+    snprintf(error, error_size,
+             "line %d: sprite '%s' runs to cel %d, past the %d cels of sheet "
+             "'%s'",
+             line, name, cel + frames, this->sheet[sheet].cel_count, sheet_name);
+    return false;
+  }
+
   scene_sprite *sprite = &this->sprite[this->sprite_count++];
   strncpy(sprite->name, name, SCENE_NAME_MAX - 1);
   sprite->name[SCENE_NAME_MAX - 1] = '\0';
   sprite->sheet = sheet;
   sprite->cel = cel;
+  sprite->frames = frames;
   return true;
 }
 
@@ -278,7 +296,9 @@ static bool assign(scene *this, const char *key, char *value, char *error,
     return false;
   }
 
-  if (!strcmp(key, "entities.count")) {
+  if (!strcmp(key, "animation.ticks")) {
+    this->animation_ticks = number;
+  } else if (!strcmp(key, "entities.count")) {
     this->entity_count = number;
     *seen_entities = true;
   } else if (!strcmp(key, "color.background")) {
@@ -353,6 +373,10 @@ static bool validate(const scene *this, bool seen_entities, char *error,
     return false;
   }
   int cels = scene_cel_count(this);
+  if (this->animation_ticks < 1) {
+    snprintf(error, error_size, "animation.ticks must be 1 or more");
+    return false;
+  }
   if (cels > SCENE_MAX_CELS) {
     snprintf(error, error_size,
              "the sheets hold %d cels, more than the %d the engine keeps",
