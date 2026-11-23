@@ -2,6 +2,7 @@
 #include "vga/vga.h"
 
 #include <conio.h>
+#include <stdint.h>
 #include <sys/nearptr.h>
 #include <time.h>
 
@@ -24,10 +25,11 @@ int main(int argc, char **argv) {
 
   while (running) {
     uclock_t now = uclock();
-    float dt = (float)(now - last) / (float)UCLOCKS_PER_SEC;
+    uint32_t elapsed_us =
+        (uint32_t)((now - last) * 1000000ULL / UCLOCKS_PER_SEC);
     last = now;
 
-    if (game_update(current_game, dt)) {
+    if (game_update(current_game, elapsed_us)) {
       game_render(current_game);
     }
 

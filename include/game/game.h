@@ -2,6 +2,7 @@
 #define GAME_H_INCLUDED
 
 #include <stdbool.h>
+#include <stdint.h>
 
 ///
 /// @brief Match-three game state.
@@ -40,11 +41,11 @@ void game_move_selection(game *this, int dx, int dy);
 void game_select(game *this);
 
 ///
-/// @brief Advances any running animation by @p dt seconds.
+/// @brief Advances any running animation by @p elapsed_us microseconds.
 ///
 /// @return true if the display needs to be redrawn.
 ///
-bool game_update(game *this, float dt);
+bool game_update(game *this, uint32_t elapsed_us);
 
 ///
 /// @brief Whether an animation is currently playing.

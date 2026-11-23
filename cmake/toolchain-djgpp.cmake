@@ -16,5 +16,8 @@ set (CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set (CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set (CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-set (CMAKE_C_FLAGS -I/usr/i686-pc-msdosdjgpp/sys-include/)
-set (CMAKE_CXX_FLAGS -I/usr/i686-pc-msdosdjgpp/sys-include/)
+# DOSBox 0.74-3's CPU core has no CMOV, which the DJGPP cross compiler emits
+# by default (-march=pentiumpro), so an unmodified build dies with an invalid
+# opcode. Target i386, which also keeps the game runnable on period hardware.
+set (CMAKE_C_FLAGS "-march=i386 -I/usr/i686-pc-msdosdjgpp/sys-include/")
+set (CMAKE_CXX_FLAGS "-march=i386 -I/usr/i686-pc-msdosdjgpp/sys-include/")

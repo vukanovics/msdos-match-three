@@ -27,10 +27,13 @@
 #define BACKGROUND_COLOR MATCH3_BACKGROUND_COLOR
 
 // Falling acceleration in pixels per second squared; lower is slower.
-#define GRAVITY 1500.0f
+#define GRAVITY 1500
 
-// Seconds for two tiles to trade places.
-#define SWAP_DURATION 0.18f
+// Microseconds for two tiles to trade places.
+#define SWAP_DURATION_US 180000
+
+// Easing curves run in 8 bits of subpixel precision.
+#define CURVE_ONE 256
 
 typedef enum phase_e {
   PHASE_IDLE,
@@ -53,7 +56,7 @@ struct game_s {
   int back_page;
 
   phase current_phase;
-  float phase_time;
+  uint32_t phase_time_us;
 
   int swap_a_row;
   int swap_a_column;
@@ -198,6 +201,29 @@ static int tile_pixel_y(game *g, int row) {
   return g->origin_y + row * TILE_SIZE;
 }
 
+// Pixels fallen from rest after @p t_us, under GRAVITY: 0.5 * G * t^2 with t
+// in seconds, so t_us is squared and scaled by 2e12.
+static int fallen_pixels(uint32_t t_us) {
+  int64_t t = (int64_t)t_us;
+  return (int)((int64_t)GRAVITY * t * t / 2000000000000LL);
+}
+
+// Eased swap progress, from 0 to CURVE_ONE.
+static int swap_progress(game *g) {
+  int64_t p = (int64_t)g->phase_time_us * CURVE_ONE / SWAP_DURATION_US;
+  if (p > CURVE_ONE) {
+    p = CURVE_ONE;
+  }
+  // Smoothstep: 3t^2 - 2t^3, with t scaled to CURVE_ONE.
+  return (int)(p * p * (3 * CURVE_ONE - 2 * p) /
+               ((int64_t)CURVE_ONE * CURVE_ONE));
+}
+
+// Interpolates from @p from to @p to with @p progress in 0..CURVE_ONE.
+static int lerp(int from, int to, int progress) {
+  return from + (to - from) * progress / CURVE_ONE;
+}
+
 static void draw_static_tiles(game *g) {
   for (int row = 0; row < BOARD_ROWS; row++) {
     for (int column = 0; column < BOARD_COLUMNS; column++) {
@@ -211,11 +237,7 @@ static void draw_static_tiles(game *g) {
 }
 
 static void draw_swap(game *g) {
-  float t = g->phase_time / SWAP_DURATION;
-  if (t > 1.0f) {
-    t = 1.0f;
-  }
-  t = t * t * (3.0f - 2.0f * t);
+  int t = swap_progress(g);
 
   for (int row = 0; row < BOARD_ROWS; row++) {
     for (int column = 0; column < BOARD_COLUMNS; column++) {
@@ -233,11 +255,11 @@ static void draw_swap(game *g) {
   int bx = tile_pixel_x(g, g->swap_b_column);
   int by = tile_pixel_y(g, g->swap_b_row);
 
-  rect a = {.x = (uint32_t)(ax + (int)((bx - ax) * t)),
-            .y = (uint32_t)(ay + (int)((by - ay) * t)),
+  rect a = {.x = (uint32_t)lerp(ax, bx, t),
+            .y = (uint32_t)lerp(ay, by, t),
             .size = {.h = TILE_SIZE, .w = TILE_SIZE}};
-  rect b = {.x = (uint32_t)(bx + (int)((ax - bx) * t)),
-            .y = (uint32_t)(by + (int)((ay - by) * t)),
+  rect b = {.x = (uint32_t)lerp(bx, ax, t),
+            .y = (uint32_t)lerp(by, ay, t),
             .size = {.h = TILE_SIZE, .w = TILE_SIZE}};
 
   copy_to_framebuffer(g->tiles[g->board[g->swap_a_row][g->swap_a_column]], a);
@@ -245,14 +267,14 @@ static void draw_swap(game *g) {
 }
 
 static void draw_falling(game *g) {
-  float fallen = 0.5f * GRAVITY * g->phase_time * g->phase_time;
+  int fallen = fallen_pixels(g->phase_time_us);
 
   for (int row = 0; row < BOARD_ROWS; row++) {
     for (int column = 0; column < BOARD_COLUMNS; column++) {
       int start_row = g->fall_start_row[row][column];
-      float distance = (float)(row - start_row) * TILE_SIZE;
-      float travelled = fallen < distance ? fallen : distance;
-      int y = g->origin_y + start_row * TILE_SIZE + (int)travelled;
+      int distance = (row - start_row) * TILE_SIZE;
+      int travelled = fallen < distance ? fallen : distance;
+      int y = g->origin_y + start_row * TILE_SIZE + travelled;
 
       draw_tile_at(g, g->fall_board[row][column], tile_pixel_x(g, column), y);
     }
@@ -261,7 +283,7 @@ static void draw_falling(game *g) {
 
 static void begin_fall(game *g) {
   g->current_phase = PHASE_FALLING;
-  g->phase_time = 0.0f;
+  g->phase_time_us = 0;
 
   for (int column = 0; column < BOARD_COLUMNS; column++) {
     int write_row = BOARD_ROWS - 1;
@@ -305,11 +327,11 @@ static void begin_resolution(game *g) {
 }
 
 static bool fall_settled(game *g) {
-  float fallen = 0.5f * GRAVITY * g->phase_time * g->phase_time;
+  int fallen = fallen_pixels(g->phase_time_us);
 
   for (int row = 0; row < BOARD_ROWS; row++) {
     for (int column = 0; column < BOARD_COLUMNS; column++) {
-      float distance = (float)(row - g->fall_start_row[row][column]) * TILE_SIZE;
+      int distance = (row - g->fall_start_row[row][column]) * TILE_SIZE;
       if (fallen < distance) {
         return false;
       }
@@ -339,7 +361,7 @@ game *game_new(void) {
   this->picked_column = -1;
 
   this->current_phase = PHASE_IDLE;
-  this->phase_time = 0.0f;
+  this->phase_time_us = 0;
 
   // Draw to page 1 first; page 0 is shown until the first flip.
   this->back_page = 1;
@@ -416,18 +438,18 @@ void game_select(game *this) {
   this->swap_b_column = this->selected_column;
 
   this->current_phase = PHASE_SWAPPING;
-  this->phase_time = 0.0f;
+  this->phase_time_us = 0;
 }
 
-bool game_update(game *this, float dt) {
+bool game_update(game *this, uint32_t elapsed_us) {
   if (this->current_phase == PHASE_IDLE) {
     return false;
   }
 
-  this->phase_time += dt;
+  this->phase_time_us += elapsed_us;
 
   if (this->current_phase == PHASE_SWAPPING) {
-    if (this->phase_time >= SWAP_DURATION) {
+    if (this->phase_time_us >= SWAP_DURATION_US) {
       int type = this->board[this->swap_a_row][this->swap_a_column];
       this->board[this->swap_a_row][this->swap_a_column] =
           this->board[this->swap_b_row][this->swap_b_column];
