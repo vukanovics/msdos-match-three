@@ -114,22 +114,16 @@ void set_display_start(size_t base) {
   uint16_t address = (uint16_t)(base / PAGE_ADDRESS_UNIT);
 
   // The CRTC latches the start address at the beginning of vertical retrace, so
-  // program it as that retrace begins and the flip takes effect for the frame
-  // that is about to start; the caller can then draw into the page that just
-  // stopped being displayed.
+  // programming it at any point during the frame takes effect at the next
+  // retrace without tearing: the switch itself always happens during blanking.
   //
-  // Bit 3 is vertical sync on real hardware, but DOSBox derives the status
-  // register from its own frame clock and never raises that bit for this mode,
-  // while bit 0 (blanking) is raised by both. Accepting either ends the wait at
-  // the same instant on hardware and makes the poll work in the emulator. The
-  // loop is bounded so a display that reports nothing cannot hang the engine.
-  for (uint32_t spins = 0; spins < 50000; spins++) {
-    input_status_1_register status = get_input_status_1();
-    if (status.vertical_retrace || status.display_enable) {
-      break;
-    }
-  }
-
+  // Nothing here polls the display status register. Its timing is the one thing
+  // that cannot be trusted across implementations - DOSBox derives it from its
+  // own frame clock, never raises vertical sync for this mode, and reports
+  // blanking for long stretches - so waiting on it produced flips at a
+  // different phase every frame. With three pages the page being drawn has been
+  // off screen for at least a frame regardless of when the flip is latched,
+  // which removes the need to know the phase at all.
   set_crtc(&CRTC_START_ADDRESS_HIGH, (uint8_t)(address >> 8));
   set_crtc(&CRTC_START_ADDRESS_LOW, (uint8_t)(address & 0xff));
 }

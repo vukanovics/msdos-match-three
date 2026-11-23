@@ -13,6 +13,13 @@
 #define FRAME_US (1000000u / TARGET_FPS)
 #define MAX_CATCH_UP_US (4u * FRAME_US)
 
+// Three pages so the page being drawn has been off screen for at least a frame
+// by the time we touch it. With two pages the flip has to be timed exactly
+// against vertical retrace, and any phase error shows up as tearing; a third
+// page removes that coupling. Each page is 19,200 bytes per plane, so three of
+// them use 57,600 of the 65,536 bytes available in each plane.
+#define PAGE_COUNT 3
+
 #define SCENE_PATH "MATCH3.SCN"
 #define LOG_PATH "ENGINE.LOG"
 
@@ -78,7 +85,13 @@ int main(void) {
   diag_open(LOG_PATH);
   diag_state(&scene_description, &state);
 
-  size_t page = 0;
+  // Put a finished frame on screen before entering the loop, so the first thing
+  // the display shows is never a page that is still being drawn.
+  size_t page_index = 0;
+  render_frame(&scene_description, &state, 0);
+  set_display_start(0);
+  page_index = 1;
+
   uint32_t frame = 0;
   uint32_t last = clock_us();
   uint32_t accumulated = 0;
@@ -101,11 +114,12 @@ int main(void) {
     }
 
     uint32_t render_start = clock_us();
+    size_t page = page_index * render_page_size();
     render_frame(&scene_description, &state, page);
     uint32_t draw_us = clock_us() - render_start;
 
     set_display_start(page);
-    page = (page == 0) ? render_page_size() : 0;
+    page_index = (page_index + 1) % PAGE_COUNT;
     uint32_t frame_us = clock_us() - render_start;
 
     frame++;
