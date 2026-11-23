@@ -30,6 +30,8 @@ const OP_NEG: u8 = 0x14;
 const OP_MIN: u8 = 0x15;
 const OP_MAX: u8 = 0x16;
 const OP_MOD: u8 = 0x17;
+const OP_FX_MUL: u8 = 0x18;
+const OP_FX_DIV: u8 = 0x19;
 const OP_EQ: u8 = 0x20;
 const OP_NE: u8 = 0x21;
 const OP_LT: u8 = 0x22;
@@ -428,6 +430,8 @@ fn primitive(word: &str) -> Option<u8> {
         "min" => OP_MIN,
         "max" => OP_MAX,
         "mod" => OP_MOD,
+        "fx*" => OP_FX_MUL,
+        "fx/" => OP_FX_DIV,
         "=" => OP_EQ,
         "<>" => OP_NE,
         "<" => OP_LT,

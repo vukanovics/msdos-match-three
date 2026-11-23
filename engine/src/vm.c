@@ -19,6 +19,8 @@
 #define OP_MIN 0x15
 #define OP_MAX 0x16
 #define OP_MOD 0x17
+#define OP_FX_MUL 0x18
+#define OP_FX_DIV 0x19
 #define OP_EQ 0x20
 #define OP_NE 0x21
 #define OP_LT 0x22
@@ -252,6 +254,30 @@ static bool run(vm *this, uint32_t entry, int32_t argument,
         push(this, a != 0 || b != 0);
         break;
       }
+      break;
+
+    case OP_FX_MUL:
+      // Q16.16 by Q16.16, through a 64-bit intermediate: the product is Q32.32
+      // before the shift, which does not fit in 32 bits.
+      b = pop_operand(this);
+      a = pop_operand(this);
+      if (this->error) {
+        break;
+      }
+      push(this, (int32_t)(((int64_t)a * (int64_t)b) >> 16));
+      break;
+
+    case OP_FX_DIV:
+      b = pop_operand(this);
+      a = pop_operand(this);
+      if (this->error) {
+        break;
+      }
+      if (b == 0) {
+        this->error = "division by zero";
+        break;
+      }
+      push(this, (int32_t)((((int64_t)a) << 16) / (int64_t)b));
       break;
 
     case OP_NEG:
