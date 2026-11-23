@@ -4,24 +4,19 @@
 #include <stdint.h>
 
 #include "engine/scene.h"
+#include "engine/slots.h"
 
 #define EMPTY_TILE (-1)
 
 ///
-/// @brief The whole mutable world.
+/// @brief The whole mutable world, as a flat table of slots.
 ///
-/// Fixed size and pointer free: this is the layout the functional update
-/// (state, input) -> state compiles against, and it can be copied or checksummed
-/// cheaply. Entity pools for things created at runtime belong here too, with
-/// their capacities known at build time.
+/// Fixed size and pointer free. This is the layout the behaviour program
+/// compiles against and the renderer reads, so there is exactly one
+/// representation of the state in the engine.
 ///
 typedef struct {
-  int8_t tiles[SCENE_MAX_ROWS][SCENE_MAX_COLUMNS];
-  int8_t cursor_row;
-  int8_t cursor_column;
-  int8_t picked_row;
-  int8_t picked_column;
-  uint32_t random;
+  int32_t slot[SLOT_COUNT];
 } world_state;
 
 ///
@@ -34,7 +29,7 @@ void state_init(world_state *this, const scene *scene);
 ///
 /// @brief xorshift32; deterministic across builds and machines.
 ///
-uint32_t state_random(world_state *this);
+uint32_t state_random(void);
 
 ///
 /// @brief FNV-1a over the state, for replay and determinism checks.

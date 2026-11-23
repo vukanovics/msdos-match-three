@@ -74,15 +74,18 @@ void diag_state(const scene *scene, const world_state *state) {
   scene_describe(scene, description, sizeof(description));
 
   fprintf(file, "state %s\n", description);
-  fprintf(file, "  checksum %08lx cursor %d,%d picked %d,%d random %08lx\n",
-          (unsigned long)state_checksum(state), state->cursor_row,
-          state->cursor_column, state->picked_row, state->picked_column,
-          (unsigned long)state->random);
+  fprintf(file, "  checksum %08lx cursor %ld,%ld picked %ld,%ld\n",
+          (unsigned long)state_checksum(state),
+          (long)state->slot[SLOT_CURSOR_ROW],
+          (long)state->slot[SLOT_CURSOR_COLUMN],
+          (long)state->slot[SLOT_PICKED_ROW],
+          (long)state->slot[SLOT_PICKED_COLUMN]);
 
   for (int row = 0; row < scene->rows; row++) {
     fprintf(file, "  row %2d:", row);
     for (int column = 0; column < scene->columns; column++) {
-      fprintf(file, " %2d", state->tiles[row][column]);
+      fprintf(file, " %2ld",
+              (long)state->slot[SLOT_TILE(row, column)]);
     }
     fprintf(file, "\n");
   }

@@ -143,20 +143,24 @@ static void outline(uint8_t *vram, size_t page_base, int x, int y, int width,
 
 static void draw_borders(const scene *scene, const world_state *state,
                          uint8_t *vram, size_t page_base) {
-  int x = origin_x + state->cursor_column * scene->tile_size;
-  int y = origin_y + state->cursor_row * scene->tile_size;
+  int cursor_row = state->slot[SLOT_CURSOR_ROW];
+  int cursor_column = state->slot[SLOT_CURSOR_COLUMN];
+  int picked_row = state->slot[SLOT_PICKED_ROW];
+  int picked_column = state->slot[SLOT_PICKED_COLUMN];
+
+  int x = origin_x + cursor_column * scene->tile_size;
+  int y = origin_y + cursor_row * scene->tile_size;
   int size = scene->tile_size;
 
-  if (state->picked_row == state->cursor_row &&
-      state->picked_column == state->cursor_column) {
+  if (picked_row == cursor_row && picked_column == cursor_column) {
     // Both land on the same tile; the pick colour wins so it stays visible.
     outline(vram, page_base, x, y, size, size, scene->picked);
     return;
   }
 
-  if (state->picked_row >= 0) {
-    outline(vram, page_base, origin_x + state->picked_column * scene->tile_size,
-            origin_y + state->picked_row * scene->tile_size, size, size,
+  if (picked_row >= 0) {
+    outline(vram, page_base, origin_x + picked_column * scene->tile_size,
+            origin_y + picked_row * scene->tile_size, size, size,
             scene->picked);
   }
   outline(vram, page_base, x, y, size, size, scene->cursor);
@@ -173,7 +177,7 @@ void render_frame(const scene *scene, const world_state *state,
 
   for (int row = 0; row < scene->rows; row++) {
     for (int column = 0; column < scene->columns; column++) {
-      int type = state->tiles[row][column];
+      int type = state->slot[SLOT_TILE(row, column)];
       if (type < 0 || type >= MATCH3_TILE_COUNT) {
         continue;
       }

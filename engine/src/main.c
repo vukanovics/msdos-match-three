@@ -1,5 +1,6 @@
 #include <conio.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/nearptr.h>
 
 #include "engine/clock.h"
@@ -7,6 +8,7 @@
 #include "engine/render.h"
 #include "engine/scene.h"
 #include "engine/state.h"
+#include "engine/vm.h"
 #include "vga/vga.h"
 
 #define TARGET_FPS 60
@@ -21,6 +23,7 @@
 #define PAGE_COUNT 2
 
 #define SCENE_PATH "MATCH3.SCN"
+#define BEHAVIOUR_PATH "MATCH3.BC"
 #define LOG_PATH "ENGINE.LOG"
 
 #define KEY_ESCAPE 0x1b
@@ -56,9 +59,62 @@ static void probe_display(void) {
   diag_line(line);
 }
 
+// Reads a whole file into memory. Assets are data on disk, not compiled in, so
+// the scene and the behaviour can be replaced without rebuilding.
+static uint8_t *read_file(const char *path, size_t *size) {
+  FILE *file = fopen(path, "rb");
+  if (!file) {
+    return NULL;
+  }
+  fseek(file, 0, SEEK_END);
+  long length = ftell(file);
+  fseek(file, 0, SEEK_SET);
+  if (length <= 0 || length > 65536) {
+    fclose(file);
+    return NULL;
+  }
+  uint8_t *data = malloc((size_t)length);
+  if (!data) {
+    fclose(file);
+    return NULL;
+  }
+  if (fread(data, 1, (size_t)length, file) != (size_t)length) {
+    free(data);
+    fclose(file);
+    return NULL;
+  }
+  fclose(file);
+  *size = (size_t)length;
+  return data;
+}
+
+static int behaviour_faulted;
+
+// One call of the behaviour program per key press. A fault is reported once and
+// then ignored, so a broken program does not turn every key into a log entry.
+static void run_behaviour(vm *machine, world_state *state, int key) {
+  if (behaviour_faulted) {
+    return;
+  }
+
+  char line[128];
+  if (!vm_call(machine, key)) {
+    behaviour_faulted = 1;
+    snprintf(line, sizeof(line), "behaviour fault on key %d: %s", key,
+             machine->error ? machine->error : "unknown");
+    diag_line(line);
+    return;
+  }
+
+  snprintf(line, sizeof(line), "key %d checksum %08lx", key,
+           (unsigned long)state_checksum(state));
+  diag_line(line);
+}
+
 int main(void) {
   scene scene_description;
   world_state state;
+  vm behaviour;
   char error[160];
 
   switch_to_mode_x();
@@ -74,6 +130,23 @@ int main(void) {
   }
 
   state_init(&state, &scene_description);
+
+  size_t behaviour_size = 0;
+  uint8_t *behaviour_bytes = read_file(BEHAVIOUR_PATH, &behaviour_size);
+  bool behaviour_ok =
+      behaviour_bytes && vm_load(&behaviour, behaviour_bytes, behaviour_size,
+                                 state.slot, SLOT_COUNT);
+  if (!behaviour_ok) {
+    const char *reason = behaviour_bytes ? behaviour.error : "cannot read it";
+    snprintf(error, sizeof(error), "behaviour %s: %s", BEHAVIOUR_PATH,
+             reason ? reason : "unknown");
+    free(behaviour_bytes);
+    __djgpp_nearptr_disable();
+    switch_to_mode_3();
+    printf("engine: %s\n", error);
+    return 1;
+  }
+
   diag_open(LOG_PATH);
   diag_state(&scene_description, &state);
 
@@ -144,10 +217,13 @@ int main(void) {
           diag_timings();
         } else if (extended == KEY_F2) {
           probe_display();
+        } else {
+          run_behaviour(&behaviour, &state, extended);
         }
-        // Other extended keys belong to the language (M1).
       } else if (key == KEY_ESCAPE) {
         running = 0;
+      } else {
+        run_behaviour(&behaviour, &state, key);
       }
     }
 
