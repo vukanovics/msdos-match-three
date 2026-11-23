@@ -79,6 +79,22 @@ impl Layout {
     }
 }
 
+// Same rules as the engine's scene loader, because the offsets the compiler bakes
+// in have to be the offsets the engine uses.
+fn push_slot(names: &mut Vec<String>, name: &str) -> Result<(), String> {
+    if name.starts_with('@') || name.starts_with('!') {
+        return Err(format!("slot name '{name}' must not start with @ or !"));
+    }
+    if name.len() >= 32 {
+        return Err(format!("slot name '{name}' is too long"));
+    }
+    if names.iter().any(|existing| existing == name) {
+        return Err(format!("duplicate slot '{name}'"));
+    }
+    names.push(name.to_string());
+    Ok(())
+}
+
 // Reads the same keys the engine's scene loader reads, so the offsets the
 // compiler bakes in are the offsets the engine uses.
 fn parse_scene(text: &str) -> Result<Layout, String> {
@@ -106,6 +122,26 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
             continue;
         }
 
+        if key == "array" {
+            let name = parts.next().ok_or("'array' needs a name")?.to_string();
+            let count: i32 = parts
+                .next()
+                .ok_or("'array' needs a count")?
+                .parse()
+                .map_err(|_| "'array' needs a whole number of elements")?;
+            let initial = parts.next().ok_or("'array' needs a value")?;
+            initial
+                .parse::<i32>()
+                .map_err(|_| format!("array '{name}' needs a whole number"))?;
+            if count < 1 || count > 256 {
+                return Err(format!("array '{name}' needs 1..256 elements"));
+            }
+            for index in 0..count {
+                push_slot(&mut names, &format!("{name}{index}"))?;
+            }
+            continue;
+        }
+
         if key != "slot" {
             continue;
         }
@@ -115,16 +151,7 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
         initial
             .parse::<i32>()
             .map_err(|_| format!("slot '{name}' needs a whole number"))?;
-        if name.starts_with('@') || name.starts_with('!') {
-            return Err(format!("slot name '{name}' must not start with @ or !"));
-        }
-        if name.len() >= 32 {
-            return Err(format!("slot name '{name}' is too long"));
-        }
-        if names.iter().any(|existing| existing == name) {
-            return Err(format!("duplicate slot '{name}'"));
-        }
-        names.push(name.to_string());
+        push_slot(&mut names, name)?;
     }
 
     let entity_count = entity_count.ok_or("the scene has no 'entities.count'")?;
@@ -329,6 +356,21 @@ impl<'a> Compiler<'a> {
         }
         if token == "!" {
             self.emit(OP_SET_INDEXED);
+            return Ok(());
+        }
+        // '&name' is the slot index of a named slot, so a program can index an
+        // array declared by the scene: '&velocity0 i +' is velocity[i].
+        if let Some(name) = token.strip_prefix('&') {
+            if name.is_empty() {
+                return Err("'&' needs a slot name".into());
+            }
+            let slot = *self
+                .layout
+                .index
+                .get(name)
+                .ok_or_else(|| format!("unknown slot '&{name}'"))?;
+            self.emit(OP_PUSH);
+            self.emit_u32(slot as u32);
             return Ok(());
         }
         if let Some(name) = token.strip_prefix('@') {

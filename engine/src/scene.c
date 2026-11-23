@@ -41,16 +41,8 @@ static char *split_word(char *text) {
   return *at ? at : NULL;
 }
 
-static bool add_global(scene *this, char *value, char *error,
-                       size_t error_size, int line) {
-  char *name = value;
-  char *initial_text = split_word(value);
-  if (!initial_text) {
-    snprintf(error, error_size, "line %d: 'slot' needs 'slot <name> <value>'",
-             line);
-    return false;
-  }
-
+static bool append_global(scene *this, const char *name, int32_t initial,
+                          char *error, size_t error_size, int line) {
   if (*name == '@' || *name == '!') {
     snprintf(error, error_size, "line %d: slot name '%s' must not start with @ "
                                 "or !",
@@ -74,6 +66,23 @@ static bool add_global(scene *this, char *value, char *error,
     }
   }
 
+  scene_global *global = &this->global[this->global_count++];
+  strncpy(global->name, name, SCENE_NAME_MAX - 1);
+  global->name[SCENE_NAME_MAX - 1] = '\0';
+  global->initial = initial;
+  return true;
+}
+
+static bool add_global(scene *this, char *value, char *error,
+                       size_t error_size, int line) {
+  char *name = value;
+  char *initial_text = split_word(value);
+  if (!initial_text) {
+    snprintf(error, error_size, "line %d: 'slot' needs 'slot <name> <value>'",
+             line);
+    return false;
+  }
+
   int initial;
   if (!parse_int(initial_text, &initial)) {
     snprintf(error, error_size, "line %d: slot '%s' needs a whole number, got "
@@ -82,10 +91,46 @@ static bool add_global(scene *this, char *value, char *error,
     return false;
   }
 
-  scene_global *global = &this->global[this->global_count++];
-  strncpy(global->name, name, SCENE_NAME_MAX - 1);
-  global->name[SCENE_NAME_MAX - 1] = '\0';
-  global->initial = initial;
+  return append_global(this, name, initial, error, error_size, line);
+}
+
+// 'array <name> <count> <value>' declares count slots called name0..name(count-1)
+// holding the same value. The behaviour program keeps its per-object state in
+// these, so the engine never has to know about it.
+static bool add_array(scene *this, char *value, char *error, size_t error_size,
+                      int line) {
+  char *name = value;
+  char *count_text = split_word(value);
+  char *initial_text = count_text ? split_word(count_text) : NULL;
+  if (!initial_text) {
+    snprintf(error, error_size,
+             "line %d: 'array' needs 'array <name> <count> <value>'", line);
+    return false;
+  }
+
+  int count;
+  int initial;
+  if (!parse_int(count_text, &count) || count < 1 ||
+      count > SCENE_MAX_GLOBALS) {
+    snprintf(error, error_size,
+             "line %d: array '%s' needs a count of 1..%d", line, name,
+             SCENE_MAX_GLOBALS);
+    return false;
+  }
+  if (!parse_int(initial_text, &initial)) {
+    snprintf(error, error_size, "line %d: array '%s' needs a whole number, got "
+                                "'%s'",
+             line, name, initial_text);
+    return false;
+  }
+
+  for (int i = 0; i < count; i++) {
+    char element[SCENE_NAME_MAX + 12];
+    snprintf(element, sizeof(element), "%s%d", name, i);
+    if (!append_global(this, element, initial, error, error_size, line)) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -93,6 +138,9 @@ static bool assign(scene *this, const char *key, char *value, char *error,
                    size_t error_size, int line, bool *seen_entities) {
   if (!strcmp(key, "slot")) {
     return add_global(this, value, error, error_size, line);
+  }
+  if (!strcmp(key, "array")) {
+    return add_array(this, value, error, error_size, line);
   }
 
   if (!strcmp(key, "scene.name")) {
@@ -127,6 +175,8 @@ static bool assign(scene *this, const char *key, char *value, char *error,
   return true;
 }
 
+// 'array' takes "array <name> <count> <value>", so its value has two parts and
+// the generic 'key value' split is done here instead.
 static bool parse_line(scene *this, char *line, char *error, size_t error_size,
                        int line_number, bool *seen_entities) {
   char *comment = strchr(line, '#');
@@ -238,7 +288,8 @@ int scene_slot_of(const scene *this, const char *name) {
 }
 
 void scene_describe(const scene *this, char *buffer, size_t buffer_size) {
-  snprintf(buffer, buffer_size, "scene %s sheet %s entities %d slots %d seed %lu",
+  snprintf(buffer, buffer_size,
+           "scene %s sheet %s entities %d slots %d background %d seed %lu",
            this->name, this->sheet, this->entity_count, scene_slot_count(this),
-           (unsigned long)this->seed);
+           (int)this->background, (unsigned long)this->seed);
 }
