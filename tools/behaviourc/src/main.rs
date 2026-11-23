@@ -55,7 +55,9 @@ const OP_HALT: u8 = 0x46;
 const OP_JZ: u8 = 0x47;
 
 const MAGIC: &[u8; 4] = b"BC02";
-const ENTITY_STRIDE: i32 = 4;
+// Must match ENTITY_STRIDE in engine/include/engine/slots.h: the compiler bakes
+// the entity pool's size into every slot index it emits.
+const ENTITY_STRIDE: i32 = 5;
 const MAX_INLINE_DEPTH: usize = 32;
 
 // 'for' is a counted loop whose count is a literal, which is what keeps it
@@ -172,9 +174,7 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
                 None => 1,
             };
             if frames < 1 {
-                return Err(format!(
-                    "sprite '{name}' needs a frame count of 1 or more"
-                ));
+                return Err(format!("sprite '{name}' needs a frame count of 1 or more"));
             }
             let count = sheets
                 .iter()

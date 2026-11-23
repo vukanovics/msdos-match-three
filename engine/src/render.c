@@ -198,10 +198,14 @@ void render_frame(const scene *scene, sprite_set *source,
       continue;
     }
 
-    // The sprite is an animation: the frame counter picks the cel, and a sprite
-    // of one frame simply ignores it.
+    // The sprite is an animation: the frame counter, less the tick it started
+    // on, picks the cel. A sprite of one frame ignores all of it.
     const sprite_anim *anim = &source->anim[handle];
-    uint32_t step = frame / (uint32_t)scene->animation_ticks;
+    int32_t since = (int32_t)frame - slots[ENTITY_ANIM_START];
+    if (since < 0) {
+      since = 0;
+    }
+    uint32_t step = (uint32_t)since / (uint32_t)scene->animation_ticks;
     int cel = anim->first_cel + (int)(step % (uint32_t)anim->frames);
 
     int x = slots[ENTITY_X] >> ENTITY_FIXED_SHIFT;

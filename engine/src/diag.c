@@ -84,11 +84,12 @@ void diag_state(const scene *scene, const world_state *state) {
     if (!(slots[ENTITY_FLAGS] & ENTITY_VISIBLE)) {
       continue;
     }
-    fprintf(file, "  entity %3d sprite %2ld x %ld y %ld flags %02lx\n", entity,
-            (long)slots[ENTITY_SPRITE],
+    fprintf(file, "  entity %3d sprite %2ld x %ld y %ld flags %02lx anim %ld\n",
+            entity, (long)slots[ENTITY_SPRITE],
             (long)(slots[ENTITY_X] >> ENTITY_FIXED_SHIFT),
             (long)(slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT),
-            (unsigned long)(slots[ENTITY_FLAGS] & 0xffffL));
+            (unsigned long)(slots[ENTITY_FLAGS] & 0xffffL),
+            (long)slots[ENTITY_ANIM_START]);
   }
 
   int base = scene->entity_count * ENTITY_STRIDE;

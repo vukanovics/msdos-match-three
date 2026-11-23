@@ -21,20 +21,38 @@ sheet yellow YELLOW.SPR 120
 sheet ui UI.SPR 2
 
 # Named sprites. The behaviour program refers to these as $name, and the handle
-# is the sprite's position here, in declaration order. The trailing number is
-# how many cels the sprite animates through; one means a still picture.
-sprite tile0 blue 0 120
-sprite tile1 cyan 0 120
-sprite tile2 green 0 120
-sprite tile3 purple 0 120
-sprite tile4 red 0 120
-sprite tile5 yellow 0 120
+# is the sprite's position here, in declaration order. The third number is the
+# first cel and the fourth how many the sprite animates through; one means a
+# still picture.
+#
+# Each sheet holds 60 cels of glimmer followed by 60 of idle. The order here
+# matters: the behaviour relies on glimmer N being handle N and idle N being
+# handle N + 6, so it can tell them apart with a single subtraction and recover
+# a gem's kind with a modulus.
+#
+# 'resident' decodes the whole run up front and keeps it. That is what makes a
+# hundred gems at a hundred phases affordable: every gem is at a different cel,
+# so without it each frame would decode a hundred of them, at about a third of a
+# millisecond each. The glimmer runs are not resident because only one gem
+# glimmers at a time, so its cels come and go through the ordinary cache.
+sprite glimmer0 blue 0 60
+sprite glimmer1 cyan 0 60
+sprite glimmer2 green 0 60
+sprite glimmer3 purple 0 60
+sprite glimmer4 red 0 60
+sprite glimmer5 yellow 0 60
+sprite idle0 blue 60 60 resident
+sprite idle1 cyan 60 60 resident
+sprite idle2 green 60 60 resident
+sprite idle3 purple 60 60 resident
+sprite idle4 red 60 60 resident
+sprite idle5 yellow 60 60 resident
 sprite cursor ui 0
 sprite picked ui 1
 
 # The art is rendered at 60 frames per second and every second frame is kept, so
-# holding each one for two 60 Hz ticks plays it at the speed it was authored.
-animation.ticks 2
+# 30 frames a second; holding each for four 60 Hz ticks plays it at half speed.
+animation.ticks 4
 
 entities.count 104
 
@@ -69,5 +87,18 @@ slot dirty 1
 
 # Per-entity state the behaviour program keeps for itself. The engine has no
 # idea these exist; they are just more slots after the entity pool.
-#   velocityN  how many Q16.16 pixels entity N is falling this tick
+#   velocityN     how many Q16.16 pixels entity N is falling this tick
 array velocity 104 0
+
+# The cells that are glimmering, and how many of the four slots are in use. A
+# fixed pool, because the tick scans it rather than the board: the cost of a
+# glimmer is then bounded no matter how many gems are on screen. Four is enough
+# for runs to overlap without the board looking like a fireworks display.
+slot glimmer-count 0
+array glimmer-cell 4 -1
+
+# Ticks since the program started. Animations are the engine's business, but
+# starting one means writing the tick it began, so the world needs a clock.
+slot time 0
+# The tick at which the next glimmer is rolled for.
+slot next-roll 0

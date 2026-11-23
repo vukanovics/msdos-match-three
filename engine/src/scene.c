@@ -245,11 +245,24 @@ static bool add_sprite(scene *this, char *value, char *error,
   }
 
   int frames = 1;
+  char *flag_text = frames_text ? split_word(frames_text) : NULL;
   if (frames_text && (!parse_int(frames_text, &frames) || frames < 1)) {
     snprintf(error, error_size, "line %d: sprite '%s' needs a frame count of 1 "
                                 "or more",
              line, name);
     return false;
+  }
+
+  bool resident = false;
+  if (flag_text) {
+    if (strcmp(flag_text, "resident")) {
+      snprintf(error, error_size,
+               "line %d: sprite '%s' takes 'resident' or nothing after its "
+               "frame count, not '%s'",
+               line, name, flag_text);
+      return false;
+    }
+    resident = true;
   }
   if (cel + frames > this->sheet[sheet].cel_count) {
     snprintf(error, error_size,
@@ -265,6 +278,7 @@ static bool add_sprite(scene *this, char *value, char *error,
   sprite->sheet = sheet;
   sprite->cel = cel;
   sprite->frames = frames;
+  sprite->resident = resident;
   return true;
 }
 

@@ -266,6 +266,22 @@ const sprite_cel *sprite_cel_at(sprite_set *this, int cel, int phase) {
     return NULL;
   }
 
+  // A resident cel is decoded once, at the alignment everything at rest uses,
+  // and kept. Animation then costs nothing to draw: the cel is already split
+  // into planes, and the blit is the same copy whatever cel it is.
+  if (phase == 0 && this->resident_cel && this->resident_cel[cel]) {
+    sprite_cel *held = &this->resident[cel];
+    if (held->width == 0) {
+      const sprite_image *image = &this->image[cel];
+      if (!sprite_cel_build(held, image->pixels, image->width, image->height,
+                            image->transparent, 0)) {
+        return NULL;
+      }
+      this->decodes++;
+    }
+    return held;
+  }
+
   this->clock++;
   int victim = 0;
   for (int i = 0; i < SPRITE_CACHE_ENTRIES; i++) {
@@ -417,5 +433,46 @@ bool sprite_set_load(sprite_set *this, const scene *scene, char *error,
     this->anim[i].first_cel = sheet_base[sprite->sheet] + sprite->cel;
     this->anim[i].frames = sprite->frames;
   }
+
+  // Decode what the scene asked to keep, now rather than on first use: the cels
+  // an animation run needs are wanted in one go the first time it plays, and
+  // building them here spends that cost once, before the first frame, instead of
+  // spread over the first loop of the animation.
+  int wanted = 0;
+  for (int i = 0; i < scene->sprite_count; i++) {
+    if (scene->sprite[i].resident) {
+      wanted++;
+    }
+  }
+  if (wanted == 0) {
+    return true;
+  }
+
+  this->resident = calloc((size_t)this->count, sizeof(sprite_cel));
+  this->resident_cel = calloc((size_t)this->count, 1);
+  if (!this->resident || !this->resident_cel) {
+    // Not fatal: without the table the cache serves every cel, just more slowly.
+    free(this->resident);
+    free(this->resident_cel);
+    this->resident = NULL;
+    this->resident_cel = NULL;
+    return true;
+  }
+
+  for (int i = 0; i < scene->sprite_count; i++) {
+    if (!scene->sprite[i].resident) {
+      continue;
+    }
+    int first = this->anim[i].first_cel;
+    for (int frame = 0; frame < this->anim[i].frames; frame++) {
+      this->resident_cel[first + frame] = 1;
+      if (!sprite_cel_at(this, first + frame, 0)) {
+        snprintf(error, error_size, "out of memory decoding a resident sprite");
+        return false;
+      }
+    }
+  }
+  // Decoding at load is not a frame; do not let it show up as one.
+  this->decodes = 0;
   return true;
 }

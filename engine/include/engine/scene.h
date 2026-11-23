@@ -59,6 +59,10 @@ typedef struct {
   int sheet;
   int cel;    // first cel in that sheet
   int frames; // cels the animation runs through; 1 for a still sprite
+  // Decode the run once and keep it. Worth it when many entities show the run at
+  // different phases, which is more than one cel in play at a time; not worth it
+  // for something only one entity ever shows.
+  bool resident;
 } scene_sprite;
 
 ///

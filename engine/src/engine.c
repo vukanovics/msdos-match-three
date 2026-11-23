@@ -97,30 +97,37 @@ static bool have_logged_checksum;
 static demo the_demo;
 
 // A fault is reported once and then ignored, so a broken program does not turn
-// every frame into a log entry. Likewise a tick that changes nothing: writing
-// the log reopens the file, which is far too expensive to do every frame.
-static bool run_program(bool ok, const vm *machine, const world_state *state,
-                        const scene *scene, const char *what) {
-  char line[128];
+// every frame into a log entry.
+static bool report_fault(bool ok, const vm *machine, const char *what) {
   if (!ok) {
     behaviour_faulted = 1;
+    char line[128];
     snprintf(line, sizeof(line), "behaviour %s fault: %s", what,
              machine->error ? machine->error : "unknown");
     diag_line(line);
     return false;
   }
+  return true;
+}
 
+// The world contains a clock, so its checksum changes on every tick. Hashing it
+// every frame costs about a millisecond, and writing a line when it changes
+// costs about another, so a per-tick trace is a frame-rate problem rather than a
+// debugging aid. State is logged when the program starts and whenever a key
+// changes something; F1 dumps it on demand.
+static void log_state(const vm *machine, const world_state *state,
+                      const scene *scene, const char *what) {
   uint32_t checksum = state_checksum(state, scene_slot_count(scene));
   if (have_logged_checksum && checksum == logged_checksum) {
-    return true;
+    return;
   }
   logged_checksum = checksum;
   have_logged_checksum = true;
 
+  char line[128];
   snprintf(line, sizeof(line), "%s checksum %08lx random %08lx", what,
            (unsigned long)checksum, (unsigned long)vm_random_state(machine));
   diag_line(line);
-  return true;
 }
 
 int engine_main(const char *scene_path, const char *behaviour_path,
@@ -181,9 +188,8 @@ int engine_main(const char *scene_path, const char *behaviour_path,
     return 1;
   }
   diag_state(&description, &state);
-  if (!run_program(vm_init(&behaviour), &behaviour, &state, &description,
-                   "init")) {
-    behaviour_faulted = 1;
+  if (report_fault(vm_init(&behaviour), &behaviour, "init")) {
+    log_state(&behaviour, &state, &description, "init");
   }
   // The world as init left it, before the first tick: the starting point every
   // later frame is compared against.
@@ -247,15 +253,15 @@ int engine_main(const char *scene_path, const char *behaviour_path,
         demo_record_key(&the_demo, frame, keys[i]);
       }
       if (!behaviour_faulted) {
-        run_program(vm_key(&behaviour, keys[i]), &behaviour, &state,
-                    &description, "key");
+        if (report_fault(vm_key(&behaviour, keys[i]), &behaviour, "key")) {
+          log_state(&behaviour, &state, &description, "key");
+        }
       }
     }
 
     uint32_t tick_start = clock_us();
     if (!behaviour_faulted) {
-      run_program(vm_tick(&behaviour), &behaviour, &state, &description,
-                  "tick");
+      report_fault(vm_tick(&behaviour), &behaviour, "tick");
     }
     uint32_t tick_us = clock_us() - tick_start;
 
@@ -278,9 +284,13 @@ int engine_main(const char *scene_path, const char *behaviour_path,
     set_display_start(page);
     page_index = (page_index + 1) % PAGE_COUNT;
     uint32_t frame_us = clock_us() - render_start;
+    diag_frame(frame, draw_us, frame_us, clock_us());
 
     frame++;
-    if (frame % 60 == 0) {
+    // Writing the log reopens the file, which is a millisecond or more and lands
+    // as a dropped frame. Once every five seconds is enough to watch the rate;
+    // the running min/max above still sees every frame.
+    if (frame % 300 == 0) {
       render_stats stats;
       render_last_stats(&stats);
 
@@ -292,10 +302,8 @@ int engine_main(const char *scene_path, const char *behaviour_path,
                (unsigned long)stats.clear_us, (unsigned long)stats.sprites_us,
                (unsigned long)stats.decodes,
                (unsigned long)(frame_us - draw_us), (unsigned long)tick_us,
-               (unsigned long)clock_raw_tick(),
                (unsigned)clock_raw_counter(), (unsigned long)clock_us());
       diag_line(line);
-      diag_frame(frame, draw_us, frame_us, clock_us());
     }
 
     if (the_demo.mode == DEMO_PLAY && frame >= the_demo.frames) {

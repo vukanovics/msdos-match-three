@@ -98,6 +98,14 @@ typedef struct {
   uint32_t clock;
   uint32_t decodes; // cels built since the last time it was read
   sprite_cel cache[SPRITE_CACHE_ENTRIES];
+
+  // Cels the scene marked resident, decoded at phase 0 and kept for the whole
+  // run. Every entity at rest is at phase 0, so this is what makes an animation
+  // cost nothing after the first time it is seen: the cache holds sixteen cels,
+  // and a hundred entities at a hundred phases would miss on all hundred of them
+  // on every frame. Empty when no sprite asked for it.
+  sprite_cel *resident;     // this->count entries, indexed by cel
+  uint8_t *resident_cel;    // this->count flags: 1 where a cel may be held
 } sprite_set;
 
 ///
@@ -113,12 +121,13 @@ bool sprite_set_load(sprite_set *this, const scene *scene, char *error,
                      size_t error_size);
 
 ///
-/// @brief The cel @p cel decoded for the alignment @p phase, from the cache
-/// when it is already there.
+/// @brief The cel @p cel decoded for the alignment @p phase, from the resident
+/// set when it is one and the cache otherwise.
 ///
-/// The returned pointer stays valid until enough other cels are asked for that
-/// it is evicted, which is why the renderer decodes and draws one entity at a
-/// time.
+/// A cel the scene marked resident is decoded on first use and never released,
+/// so the pointer stays valid for the rest of the run. A cached one stays valid
+/// until enough other cels are asked for that it is evicted, which is why the
+/// renderer decodes and draws one entity at a time.
 ///
 const sprite_cel *sprite_cel_at(sprite_set *this, int cel, int phase);
 

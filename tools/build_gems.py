@@ -2,16 +2,19 @@
 """Build the gem sprite sheets from the source renders.
 
 The source art is a 16x15 grid of 256x256 cells per colour, read left to right
-and top to bottom, at 60 frames per second. The game runs at 60 ticks and needs
-4 to 8 MB of RAM in total, so:
+and top to bottom, at 60 frames per second. The first half of the cells is the
+glimmer animation and the second half is the idle one, so each is halved
+separately and both start at their own first frame. The game runs at 60 ticks
+and needs 4 to 8 MB of RAM in total, so:
 
   - every second frame is kept, which is 30 animation frames per second
   - each frame is scaled to 24x24, the tile size the board uses
   - one palette is built from all six colours, because Mode X shows one palette
     at a time and the engine rejects a scene whose sheets disagree
 
-Each colour becomes one .spr of 120 cels, plus a two cel UI sheet whose boxes
-are drawn here rather than in the engine.
+Each colour becomes one .spr of 120 cels - 60 of glimmer, then 60 of idle - in
+that order, plus a two cel UI sheet whose boxes are drawn here rather than in
+the engine.
 
 Usage: build_gems.py <source-dir> <output-dir>
 """
@@ -73,7 +76,11 @@ def write_spr(path, width, height, palette, cels, transparent):
 
 
 def load_frames(path):
-    """The selected cells of one source sheet, scaled to the tile size."""
+    """The selected cells of one source sheet, scaled to the tile size.
+
+    Returns the glimmer frames followed by the idle ones, so one sprite handle
+    can name either run by its first cel.
+    """
     image = Image.open(path).convert("RGBA")
     if image.width != CELL * COLUMNS or image.height != CELL * ROWS:
         raise SystemExit(
@@ -91,9 +98,9 @@ def load_frames(path):
                 (row + 1) * CELL,
             )
             frames.append(image.crop(box))
-    return [
-        frame.resize((OUT, OUT), Image.LANCZOS) for frame in frames[::KEEP_EVERY]
-    ]
+    half = len(frames) // 2
+    kept = frames[:half:KEEP_EVERY] + frames[half::KEEP_EVERY]
+    return [frame.resize((OUT, OUT), Image.LANCZOS) for frame in kept]
 
 
 def on_black(frame):
