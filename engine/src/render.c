@@ -18,7 +18,6 @@ typedef char page_size_must_be_a_multiple_of_256[(PAGE_SIZE % 256 == 0) ? 1 : -1
 // Bytes per scanline in one plane.
 #define ROW_BYTES (SCREEN_WIDTH / 4)
 
-static const sprite_sheet *sheet;
 static render_stats last_stats;
 
 void render_last_stats(render_stats *stats) { *stats = last_stats; }
@@ -29,20 +28,13 @@ static uint8_t *video_memory(void) {
 
 size_t render_page_size(void) { return PAGE_SIZE; }
 
-bool render_init(const scene *scene, const sprite_sheet *source, char *error,
+bool render_init(const scene *scene, const sprite_set *source, char *error,
                  size_t error_size) {
-  if (!source || source->count <= 0 || source->width <= 0 ||
-      source->height <= 0) {
-    snprintf(error, error_size, "scene '%s' has no usable sprite sheet", scene->name);
-    return false;
-  }
-  if (source->width > SCREEN_WIDTH || source->height > SCREEN_HEIGHT) {
-    snprintf(error, error_size, "sprite %dx%d is larger than the screen",
-             source->width, source->height);
+  if (!source || source->count <= 0) {
+    snprintf(error, error_size, "scene '%s' has no sprites", scene->name);
     return false;
   }
 
-  sheet = source;
   set_palette(source->palette, 256);
   set_gc(&GC_BIT_MASK, 0xff);
   return true;
@@ -155,8 +147,8 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
   }
 }
 
-void render_frame(const scene *scene, const world_state *state,
-                  size_t page_base) {
+void render_frame(const scene *scene, const sprite_set *source,
+                  const world_state *state, size_t page_base) {
   uint8_t *vram = video_memory();
   uint32_t start = clock_us();
 
@@ -170,10 +162,10 @@ void render_frame(const scene *scene, const world_state *state,
       continue;
     }
     int cel = slots[ENTITY_SPRITE];
-    if (cel < 0 || cel >= sheet->count) {
+    if (cel < 0 || cel >= source->count) {
       continue;
     }
-    blit(&sheet->cel[cel], slots[ENTITY_X] >> ENTITY_FIXED_SHIFT,
+    blit(&source->cel[cel], slots[ENTITY_X] >> ENTITY_FIXED_SHIFT,
          slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT, page_base);
   }
   uint32_t after_sprites = clock_us();

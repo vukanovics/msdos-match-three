@@ -126,21 +126,27 @@ static bool run_program(bool ok, const vm *machine, const world_state *state,
 int engine_main(const char *scene_path, const char *behaviour_path,
                 demo_mode mode, const char *demo_path) {
   scene description;
-  sprite_sheet sprites;
   world_state state;
   vm behaviour;
   char error[160];
   char demo_summary[128];
   demo_summary[0] = '\0';
 
+  // The sprite set is far too big for the stack under DPMI; it is loaded once
+  // and lives for the whole run.
+  sprite_set *sprites = malloc(sizeof(sprite_set));
+  if (!sprites) {
+    printf("engine: out of memory for the sprite set\n");
+    return 1;
+  }
+
   switch_to_mode_x();
   __djgpp_nearptr_enable();
   clock_init();
 
   if (!scene_load(&description, scene_path, error, sizeof(error)) ||
-      !sprite_sheet_load(&sprites, description.sheet, error,
-                         sizeof(error)) ||
-      !render_init(&description, &sprites, error, sizeof(error))) {
+      !sprite_set_load(sprites, &description, error, sizeof(error)) ||
+      !render_init(&description, sprites, error, sizeof(error))) {
     __djgpp_nearptr_disable();
     switch_to_mode_3();
     printf("engine: %s\n", error);
@@ -187,7 +193,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   // that is not being displayed (the mode set leaves the display on page 0), so
   // even the first frame is presented complete.
   size_t page_index = 0;
-  render_frame(&description, &state, render_page_size());
+  render_frame(&description, sprites, &state, render_page_size());
   set_display_start(render_page_size());
 
   uint32_t frame = 0;
@@ -260,7 +266,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
 
     uint32_t render_start = clock_us();
     size_t page = page_index * render_page_size();
-    render_frame(&description, &state, page);
+    render_frame(&description, sprites, &state, page);
     uint32_t draw_us = clock_us() - render_start;
 
     set_display_start(page);

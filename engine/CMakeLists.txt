@@ -20,6 +20,7 @@ install(TARGETS match3 RUNTIME DESTINATION bin)
 # the executable so they can be edited and reloaded without rebuilding.
 install(FILES assets/match3.scene DESTINATION bin RENAME MATCH3.SCN)
 install(FILES assets/tiles.spr DESTINATION bin RENAME TILES.SPR)
+install(FILES assets/ui.spr DESTINATION bin RENAME UI.SPR)
 
 # The behaviour language is compiled on the host, so type, name and termination
 # problems are build errors; the guest only ever runs bytecode. The compiler is

@@ -25,14 +25,14 @@ void render_last_stats(render_stats *stats);
 /// The renderer draws whatever the entity pool says: it has no notion of a
 /// board, a tile or a cursor, only of sprites at positions.
 ///
-bool render_init(const scene *scene, const sprite_sheet *sheet, char *error,
+bool render_init(const scene *scene, const sprite_set *sprites, char *error,
                  size_t error_size);
 
 ///
 /// @brief Draws one frame of @p state into the page at @p page_base.
 ///
-void render_frame(const scene *scene, const world_state *state,
-                  size_t page_base);
+void render_frame(const scene *scene, const sprite_set *sprites,
+                  const world_state *state, size_t page_base);
 
 ///
 /// @brief Offset, in per-plane bytes, of the second display page.

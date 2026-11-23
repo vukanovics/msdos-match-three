@@ -101,9 +101,10 @@ bool sprite_cel_build(sprite_cel *this, const uint8_t *pixels, int width,
   return true;
 }
 
-bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
+// Reads one declared sheet and appends its cels to the set.
+static bool load_sheet(sprite_set *this, const scene_sheet *sheet, char *error,
                        size_t error_size) {
-  memset(this, 0, sizeof(*this));
+  const char *path = sheet->path;
 
   FILE *file = fopen(path, "rb");
   if (!file) {
@@ -130,20 +131,44 @@ bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
              width, height);
     return false;
   }
-  if (count < 1 || count > SPRITE_MAX_COUNT) {
+  // The scene's count is what the behaviour was compiled against, so a file
+  // that disagrees is a build problem, not something to paper over.
+  if (count != sheet->cel_count) {
     fclose(file);
-    snprintf(error, error_size, "%s has %d cels, more than %d", path, count,
-             SPRITE_MAX_COUNT);
+    snprintf(error, error_size, "%s holds %d cels, but the scene says %d", path,
+             count, sheet->cel_count);
+    return false;
+  }
+  if (this->count + count > SCENE_MAX_CELS) {
+    fclose(file);
+    snprintf(error, error_size, "%s would take the scene past %d cels", path,
+             SCENE_MAX_CELS);
     return false;
   }
 
-  uint8_t transparent[SPRITE_MAX_COUNT];
-  if (fread(this->palette, 1, SPRITE_PALETTE_BYTES, file) !=
-          SPRITE_PALETTE_BYTES ||
+  uint8_t palette[SPRITE_PALETTE_BYTES];
+  uint8_t transparent[SCENE_MAX_CELS];
+  if (fread(palette, 1, SPRITE_PALETTE_BYTES, file) != SPRITE_PALETTE_BYTES ||
       fread(transparent, 1, (size_t)count, file) != (size_t)count) {
     fclose(file);
     snprintf(error, error_size, "%s ends inside its header", path);
     return false;
+  }
+
+  // Mode X shows one palette at a time, so every sheet in a scene has to be
+  // indexed against the same one. Comparing is the only honest response.
+  if (this->palette_loaded) {
+    if (memcmp(this->palette, palette, SPRITE_PALETTE_BYTES) != 0) {
+      fclose(file);
+      snprintf(error, error_size,
+               "%s uses a different palette from the sheets before it; a scene "
+               "can only show one",
+               path);
+      return false;
+    }
+  } else {
+    memcpy(this->palette, palette, SPRITE_PALETTE_BYTES);
+    this->palette_loaded = true;
   }
 
   size_t cel_bytes = (size_t)width * (size_t)height;
@@ -154,10 +179,6 @@ bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
     return false;
   }
 
-  this->count = count;
-  this->width = width;
-  this->height = height;
-
   for (int cel = 0; cel < count; cel++) {
     if (fread(pixels, 1, cel_bytes, file) != cel_bytes) {
       free(pixels);
@@ -166,7 +187,7 @@ bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
                count);
       return false;
     }
-    if (!sprite_cel_build(&this->cel[cel], pixels, width, height,
+    if (!sprite_cel_build(&this->cel[this->count + cel], pixels, width, height,
                           transparent[cel])) {
       free(pixels);
       fclose(file);
@@ -177,5 +198,18 @@ bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
 
   free(pixels);
   fclose(file);
+  this->count += count;
   return true;
+}
+
+bool sprite_set_load(sprite_set *this, const scene *scene, char *error,
+                     size_t error_size) {
+  memset(this, 0, sizeof(*this));
+
+  for (int i = 0; i < scene->sheet_count; i++) {
+    if (!load_sheet(this, &scene->sheet[i], error, error_size)) {
+      return false;
+    }
+  }
+  return this->count > 0;
 }

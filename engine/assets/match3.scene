@@ -9,8 +9,22 @@
 
 scene.name match3
 
-# Sprite sheet on disk, written by tools/png_to_spr.py.
-sheet TILES.SPR
+# Sprite sheets on disk, written by tools/png_to_spr.py. The count is declared
+# here so the behaviour compiler can hand every sprite a number without reading
+# the art; the loader checks each file against it.
+sheet tiles TILES.SPR 6
+sheet ui UI.SPR 2
+
+# Named sprites. The behaviour program refers to these as $name, and the handle
+# is the cel's place in the flat list of all sheets, in declaration order.
+sprite tile0 tiles 0
+sprite tile1 tiles 1
+sprite tile2 tiles 2
+sprite tile3 tiles 3
+sprite tile4 tiles 4
+sprite tile5 tiles 5
+sprite cursor ui 0
+sprite picked ui 1
 
 # Entity pool. The behaviour program builds the board in it:
 #    0.. 99   board tiles, row * 10 + column

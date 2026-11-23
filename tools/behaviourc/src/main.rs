@@ -71,6 +71,9 @@ struct Layout {
     entity_count: i32,
     names: Vec<String>,
     index: HashMap<String, u16>,
+    // Sprite name -> handle, where a handle is the cel's index in the flat list
+    // of every sheet the scene names, in declaration order.
+    sprites: HashMap<String, u32>,
 }
 
 impl Layout {
@@ -100,6 +103,8 @@ fn push_slot(names: &mut Vec<String>, name: &str) -> Result<(), String> {
 fn parse_scene(text: &str) -> Result<Layout, String> {
     let mut entity_count = None;
     let mut names: Vec<String> = Vec::new();
+    let mut sheets: Vec<(String, i32)> = Vec::new();
+    let mut sprites: Vec<(String, u32)> = Vec::new();
 
     for line in text.lines() {
         let line = line.split('#').next().unwrap_or("").trim();
@@ -119,6 +124,71 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
                 return Err(format!("entities.count {value} is out of range"));
             }
             entity_count = Some(value);
+            continue;
+        }
+
+        if key == "sheet" {
+            let name = parts.next().ok_or("'sheet' needs a name")?.to_string();
+            let _path = parts.next().ok_or("'sheet' needs a file")?;
+            let count: i32 = parts
+                .next()
+                .ok_or("'sheet' needs a cel count")?
+                .parse()
+                .map_err(|_| "'sheet' needs a whole number of cels")?;
+            if count < 1 || count > 128 {
+                return Err(format!("sheet '{name}' needs 1..128 cels"));
+            }
+            if sheets.len() >= 8 {
+                return Err("more than 8 sheets".into());
+            }
+            if sheets.iter().any(|(existing, _)| existing == &name) {
+                return Err(format!("duplicate sheet '{name}'"));
+            }
+            sheets.push((name, count));
+            continue;
+        }
+
+        if key == "sprite" {
+            let name = parts.next().ok_or("'sprite' needs a name")?.to_string();
+            let sheet_name = parts.next().ok_or("'sprite' needs a sheet")?.to_string();
+            let cel: i32 = parts
+                .next()
+                .ok_or("'sprite' needs a cel")?
+                .parse()
+                .map_err(|_| "'sprite' needs a whole cel number")?;
+            if name.starts_with('$') {
+                return Err(format!(
+                    "sprite name '{name}' must not start with $, which is how the \
+                     behaviour program refers to it"
+                ));
+            }
+            if sprites.iter().any(|(existing, _)| existing == &name) {
+                return Err(format!("duplicate sprite '{name}'"));
+            }
+            // Sheets have to be declared first, as in the engine's loader, so
+            // the handle can be computed here and an error lands on this line.
+            let mut base = 0;
+            let mut found = None;
+            for (sheet, count) in &sheets {
+                if sheet == &sheet_name {
+                    found = Some(*count);
+                    break;
+                }
+                base += count;
+            }
+            let count = found.ok_or_else(|| {
+                format!(
+                    "unknown sheet '{sheet_name}' (declare sheets before the \
+                     sprites that use them)"
+                )
+            })?;
+            if cel < 0 || cel >= count {
+                return Err(format!(
+                    "sheet '{sheet_name}' has 0..{} cels, not {cel}",
+                    count - 1
+                ));
+            }
+            sprites.push((name, (base + cel) as u32));
             continue;
         }
 
@@ -170,6 +240,7 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
         entity_count,
         names,
         index,
+        sprites: sprites.into_iter().collect(),
     };
     if layout.slot_count() > u16::MAX as i32 {
         return Err("too many slots".into());
@@ -356,6 +427,20 @@ impl<'a> Compiler<'a> {
         }
         if token == "!" {
             self.emit(OP_SET_INDEXED);
+            return Ok(());
+        }
+        // '$name' is the handle of a sprite the scene named.
+        if let Some(name) = token.strip_prefix('$') {
+            if name.is_empty() {
+                return Err("'$' needs a sprite name".into());
+            }
+            let handle = *self
+                .layout
+                .sprites
+                .get(name)
+                .ok_or_else(|| format!("unknown sprite '${name}'"))?;
+            self.emit(OP_PUSH);
+            self.emit_u32(handle);
             return Ok(());
         }
         // '&name' is the slot index of a named slot, so a program can index an

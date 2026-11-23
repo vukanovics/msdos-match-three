@@ -227,7 +227,7 @@ def refill-pass
   for 100 [
     dup 4 * @ 0 <
     [
-      random 6 mod over 4 * !
+      $tile0 random 6 mod + over 4 * !
       dup 10 / cell * above-board - over 4 * 2 + !
       vel-base over + !temp-d
       0 @temp-d !
@@ -291,14 +291,14 @@ end
 # The index of each cell is pushed by 'for'; the body leaves nothing behind.
 def init
   for 100 [
-    dup 4 * random 6 mod swap !                        # sprite
+    dup 4 * $tile0 random 6 mod + swap !                        # sprite
     dup 10 mod cell * origin-x + over 4 * 1 + !          # x
     dup 10 / cell * over 4 * 2 + !                     # y
     1 over 4 * 3 + !                                   # visible
     drop
   ]
-  6 400 !               # cursor sprite
-  7 404 !               # picked sprite
+  $cursor 400 !         # cursor sprite
+  $picked 404 !         # picked sprite
   1 403 !               # cursor visible
   place-cursor
 end

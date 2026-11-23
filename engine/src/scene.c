@@ -134,6 +134,122 @@ static bool add_array(scene *this, char *value, char *error, size_t error_size,
   return true;
 }
 
+// 'sheet <name> <file> <cels>' and 'sprite <name> <sheet> <cel>' both carry more
+// than one value, so they split their own.
+//
+// A sprite may only name a sheet declared above it. That is a small restriction
+// on the author in exchange for an error on the right line, and for not having
+// to keep unresolved names around.
+static bool add_sheet(scene *this, char *value, char *error, size_t error_size,
+                      int line) {
+  char *name = value;
+  char *path = split_word(value);
+  char *count_text = path ? split_word(path) : NULL;
+  if (!count_text) {
+    snprintf(error, error_size,
+             "line %d: 'sheet' needs 'sheet <name> <file> <cels>'", line);
+    return false;
+  }
+  if (!*name || strlen(name) >= SCENE_NAME_MAX ||
+      strlen(path) >= SCENE_NAME_MAX) {
+    snprintf(error, error_size, "line %d: sheet names must be 1..%d chars",
+             line, SCENE_NAME_MAX - 1);
+    return false;
+  }
+  if (this->sheet_count >= SCENE_MAX_SHEETS) {
+    snprintf(error, error_size, "line %d: more than %d sheets", line,
+             SCENE_MAX_SHEETS);
+    return false;
+  }
+  for (int i = 0; i < this->sheet_count; i++) {
+    if (!strcmp(this->sheet[i].name, name)) {
+      snprintf(error, error_size, "line %d: duplicate sheet '%s'", line, name);
+      return false;
+    }
+  }
+
+  int count;
+  if (!parse_int(count_text, &count) || count < 1 || count > SCENE_MAX_CELS) {
+    snprintf(error, error_size, "line %d: sheet '%s' needs 1..%d cels", line,
+             name, SCENE_MAX_CELS);
+    return false;
+  }
+
+  scene_sheet *sheet = &this->sheet[this->sheet_count++];
+  strncpy(sheet->name, name, SCENE_NAME_MAX - 1);
+  sheet->name[SCENE_NAME_MAX - 1] = '\0';
+  strncpy(sheet->path, path, SCENE_NAME_MAX - 1);
+  sheet->path[SCENE_NAME_MAX - 1] = '\0';
+  sheet->cel_count = count;
+  return true;
+}
+
+static bool add_sprite(scene *this, char *value, char *error,
+                       size_t error_size, int line) {
+  char *name = value;
+  char *sheet_name = split_word(value);
+  char *cel_text = sheet_name ? split_word(sheet_name) : NULL;
+  if (!cel_text) {
+    snprintf(error, error_size,
+             "line %d: 'sprite' needs 'sprite <name> <sheet> <cel>'", line);
+    return false;
+  }
+  if (*name == '$') {
+    snprintf(error, error_size,
+             "line %d: sprite name '%s' must not start with $, which is how "
+             "the behaviour program refers to it",
+             line, name);
+    return false;
+  }
+  if (!*name || strlen(name) >= SCENE_NAME_MAX) {
+    snprintf(error, error_size, "line %d: sprite names must be 1..%d chars",
+             line, SCENE_NAME_MAX - 1);
+    return false;
+  }
+  if (this->sprite_count >= SCENE_MAX_SPRITES) {
+    snprintf(error, error_size, "line %d: more than %d sprites", line,
+             SCENE_MAX_SPRITES);
+    return false;
+  }
+  for (int i = 0; i < this->sprite_count; i++) {
+    if (!strcmp(this->sprite[i].name, name)) {
+      snprintf(error, error_size, "line %d: duplicate sprite '%s'", line,
+               name);
+      return false;
+    }
+  }
+
+  int sheet = -1;
+  for (int i = 0; i < this->sheet_count; i++) {
+    if (!strcmp(this->sheet[i].name, sheet_name)) {
+      sheet = i;
+      break;
+    }
+  }
+  if (sheet < 0) {
+    snprintf(error, error_size,
+             "line %d: unknown sheet '%s' (declare sheets before the sprites "
+             "that use them)",
+             line, sheet_name);
+    return false;
+  }
+
+  int cel;
+  if (!parse_int(cel_text, &cel) || cel < 0 ||
+      cel >= this->sheet[sheet].cel_count) {
+    snprintf(error, error_size, "line %d: sheet '%s' has 0..%d cels, not '%s'",
+             line, sheet_name, this->sheet[sheet].cel_count - 1, cel_text);
+    return false;
+  }
+
+  scene_sprite *sprite = &this->sprite[this->sprite_count++];
+  strncpy(sprite->name, name, SCENE_NAME_MAX - 1);
+  sprite->name[SCENE_NAME_MAX - 1] = '\0';
+  sprite->sheet = sheet;
+  sprite->cel = cel;
+  return true;
+}
+
 static bool assign(scene *this, const char *key, char *value, char *error,
                    size_t error_size, int line, bool *seen_entities) {
   if (!strcmp(key, "slot")) {
@@ -142,15 +258,16 @@ static bool assign(scene *this, const char *key, char *value, char *error,
   if (!strcmp(key, "array")) {
     return add_array(this, value, error, error_size, line);
   }
+  if (!strcmp(key, "sheet")) {
+    return add_sheet(this, value, error, error_size, line);
+  }
+  if (!strcmp(key, "sprite")) {
+    return add_sprite(this, value, error, error_size, line);
+  }
 
   if (!strcmp(key, "scene.name")) {
     strncpy(this->name, value, SCENE_NAME_MAX - 1);
     this->name[SCENE_NAME_MAX - 1] = '\0';
-    return true;
-  }
-  if (!strcmp(key, "sheet")) {
-    strncpy(this->sheet, value, SCENE_NAME_MAX - 1);
-    this->sheet[SCENE_NAME_MAX - 1] = '\0';
     return true;
   }
 
@@ -231,8 +348,15 @@ static bool validate(const scene *this, bool seen_entities, char *error,
              SCENE_MAX_ENTITIES);
     return false;
   }
-  if (!this->sheet[0]) {
-    snprintf(error, error_size, "missing 'sheet'");
+  if (this->sheet_count < 1) {
+    snprintf(error, error_size, "the scene names no sprite sheet");
+    return false;
+  }
+  int cels = scene_cel_count(this);
+  if (cels > SCENE_MAX_CELS) {
+    snprintf(error, error_size,
+             "the sheets hold %d cels, more than the %d the engine keeps",
+             cels, SCENE_MAX_CELS);
     return false;
   }
   return true;
@@ -278,6 +402,32 @@ int scene_slot_count(const scene *this) {
   return this->entity_count * ENTITY_STRIDE + this->global_count;
 }
 
+int scene_cel_count(const scene *this) {
+  int total = 0;
+  for (int i = 0; i < this->sheet_count; i++) {
+    total += this->sheet[i].cel_count;
+  }
+  return total;
+}
+
+int scene_sprite_handle(const scene *this, int index) {
+  const scene_sprite *sprite = &this->sprite[index];
+  int base = 0;
+  for (int i = 0; i < sprite->sheet; i++) {
+    base += this->sheet[i].cel_count;
+  }
+  return base + sprite->cel;
+}
+
+int scene_find_sprite(const scene *this, const char *name) {
+  for (int i = 0; i < this->sprite_count; i++) {
+    if (!strcmp(this->sprite[i].name, name)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 int scene_slot_of(const scene *this, const char *name) {
   for (int i = 0; i < this->global_count; i++) {
     if (!strcmp(this->global[i].name, name)) {
@@ -289,7 +439,9 @@ int scene_slot_of(const scene *this, const char *name) {
 
 void scene_describe(const scene *this, char *buffer, size_t buffer_size) {
   snprintf(buffer, buffer_size,
-           "scene %s sheet %s entities %d slots %d background %d seed %lu",
-           this->name, this->sheet, this->entity_count, scene_slot_count(this),
+           "scene %s entities %d slots %d sheets %d sprites %d cels %d "
+           "background %d seed %lu",
+           this->name, this->entity_count, scene_slot_count(this),
+           this->sheet_count, this->sprite_count, scene_cel_count(this),
            (int)this->background, (unsigned long)this->seed);
 }

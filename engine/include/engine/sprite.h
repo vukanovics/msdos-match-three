@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "engine/scene.h"
+
 // A sprite is stored pre-shifted into the four horizontal alignments, so
 // drawing never has to shift bits at run time: the phase is simply the low two
 // bits of the destination x coordinate.
@@ -41,24 +43,25 @@ typedef struct {
 
 typedef struct {
   int count;
-  int width;
-  int height;
+  bool palette_loaded;
   // As set_palette expects it: 256 RGB triples, eight bits each.
   uint8_t palette[SPRITE_PALETTE_BYTES];
-  sprite_cel cel[SPRITE_MAX_COUNT];
-} sprite_sheet;
+  // Every sheet the scene names, appended in declaration order. A sprite handle
+  // is an index into this, which is why the handles are stable and flat.
+  sprite_cel cel[SCENE_MAX_CELS];
+} sprite_set;
 
 ///
-/// @brief Loads a sheet from an .spr file.
+/// @brief Loads every sheet @p scene declares, in order.
 ///
 /// Art is data on disk like the scene and the behaviour, so replacing a sheet
-/// needs no rebuild. The file is described by tools/png_to_spr.py.
+/// needs no rebuild. The file format is described by tools/png_to_spr.py.
 ///
-/// @return false and fills @p error when the file is missing, is not a sprite
-/// sheet, or is truncated.
+/// @return false and fills @p error when a file is missing, is not a sprite
+/// sheet, is truncated, or does not match what the scene declared.
 ///
-bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
-                       size_t error_size);
+bool sprite_set_load(sprite_set *this, const scene *scene, char *error,
+                     size_t error_size);
 
 ///
 /// @brief Builds one cel from chunky indexed pixels.
