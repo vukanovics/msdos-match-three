@@ -9,17 +9,17 @@ add_executable(match3
   src/diag.c
   src/vm.c
   src/demo.c
-  src/match3_sheet.c
 )
 set_target_properties(match3 PROPERTIES SUFFIX ".exe")
-target_include_directories(match3 PUBLIC include assets)
+target_include_directories(match3 PUBLIC include)
 target_link_libraries(match3 vga common)
 
 install(TARGETS match3 RUNTIME DESTINATION bin)
 
-# The scene is data, not code: it is installed next to the executable so it can
-# be edited and reloaded without rebuilding.
+# The scene and the sprite sheet are data, not code: they are installed next to
+# the executable so they can be edited and reloaded without rebuilding.
 install(FILES assets/match3.scene DESTINATION bin RENAME MATCH3.SCN)
+install(FILES assets/tiles.spr DESTINATION bin RENAME TILES.SPR)
 
 # The behaviour language is compiled on the host, so type, name and termination
 # problems are build errors; the guest only ever runs bytecode. The compiler is

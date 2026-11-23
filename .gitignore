@@ -12,3 +12,5 @@ docs/
 references/
 bin/MATCH3.BC
 bin/MATCH3.DEM
+bin/TILES.SPR
+tools/behaviourc/target

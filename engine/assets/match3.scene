@@ -9,8 +9,8 @@
 
 scene.name match3
 
-# A sheet name the game registers with the engine; see engine/src/match3_sheet.c
-sheet match3_tiles
+# Sprite sheet on disk, written by tools/png_to_spr.py.
+sheet TILES.SPR
 
 # Entity pool. The behaviour program builds the board in it:
 #    0.. 99   board tiles, row * 10 + column

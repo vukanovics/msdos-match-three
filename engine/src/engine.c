@@ -124,8 +124,7 @@ static bool run_program(bool ok, const vm *machine, const world_state *state,
 }
 
 int engine_main(const char *scene_path, const char *behaviour_path,
-                const sheet_source *const *sheets, demo_mode mode,
-                const char *demo_path) {
+                demo_mode mode, const char *demo_path) {
   scene description;
   sprite_sheet sprites;
   world_state state;
@@ -139,7 +138,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   clock_init();
 
   if (!scene_load(&description, scene_path, error, sizeof(error)) ||
-      !sprite_sheet_load(&sprites, sheets, description.sheet, error,
+      !sprite_sheet_load(&sprites, description.sheet, error,
                          sizeof(error)) ||
       !render_init(&description, &sprites, error, sizeof(error))) {
     __djgpp_nearptr_disable();

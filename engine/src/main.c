@@ -1,18 +1,15 @@
 // The match-three game, as data: a scene file, a compiled behaviour program,
-// and the sprite sheet provider. Everything else is the engine.
+// and a sprite sheet. Everything else is the engine.
 
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "engine/engine.h"
-#include "match3_sheet.h"
 
 #define SCENE_PATH "MATCH3.SCN"
 #define BEHAVIOUR_PATH "MATCH3.BC"
 #define DEMO_PATH "MATCH3.DEM"
-
-static const sheet_source *const sheets[] = {&match3_sheets, NULL};
 
 // DOS may hand the arguments over in either case.
 static int same(const char *a, const char *b) {
@@ -47,5 +44,5 @@ int main(int argc, char **argv) {
     }
   }
 
-  return engine_main(SCENE_PATH, BEHAVIOUR_PATH, sheets, mode, DEMO_PATH);
+  return engine_main(SCENE_PATH, BEHAVIOUR_PATH, mode, DEMO_PATH);
 }

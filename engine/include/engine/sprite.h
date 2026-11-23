@@ -16,6 +16,7 @@
 
 #define SPRITE_PHASES 4
 #define SPRITE_MAX_COUNT 64
+#define SPRITE_PALETTE_BYTES (256 * 3)
 
 typedef struct {
   uint8_t *data;    // bytes_per_row * height, colour indices
@@ -42,30 +43,22 @@ typedef struct {
   int count;
   int width;
   int height;
-  const uint8_t *palette; // 256 entries of three bytes
+  // As set_palette expects it: 256 RGB triples, eight bits each.
+  uint8_t palette[SPRITE_PALETTE_BYTES];
   sprite_cel cel[SPRITE_MAX_COUNT];
 } sprite_sheet;
 
 ///
-/// @brief A sheet the engine can build, named by the scene's 'sheet' key.
+/// @brief Loads a sheet from an .spr file.
 ///
-/// The engine knows nothing about any particular sheet: the game supplies its
-/// providers to engine_main. Replacing this with a loader for a sprites file on
-/// disk is a change of provider, not a change of engine.
+/// Art is data on disk like the scene and the behaviour, so replacing a sheet
+/// needs no rebuild. The file is described by tools/png_to_spr.py.
 ///
-typedef struct {
-  const char *name;
-  bool (*build)(sprite_sheet *sheet, char *error, size_t error_size);
-} sheet_source;
-
+/// @return false and fills @p error when the file is missing, is not a sprite
+/// sheet, or is truncated.
 ///
-/// @brief Builds the cel named by @p name from @p sources.
-///
-/// @return false and fills @p error when no provider claims the name or the
-/// provider rejects it.
-///
-bool sprite_sheet_load(sprite_sheet *this, const sheet_source *const *sources,
-                       const char *name, char *error, size_t error_size);
+bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
+                       size_t error_size);
 
 ///
 /// @brief Builds one cel from chunky indexed pixels.

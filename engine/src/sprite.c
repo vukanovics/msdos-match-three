@@ -4,6 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "vga/vga.h"
+
+// File layout, matching tools/png_to_spr.py.
+#define SHEET_MAGIC "SPR1"
+#define SHEET_HEADER_SIZE 10
+#define SHEET_PALETTE_OFFSET SHEET_HEADER_SIZE
+#define SHEET_TRANSPARENT_OFFSET (SHEET_HEADER_SIZE + SPRITE_PALETTE_BYTES)
+
 // Room for the widest phase: pixel width - 1 shifted by up to 3, then rounded
 // up to a whole byte, plus the byte that the shift spills into.
 static int bytes_per_row_for(int width) { return ((width + 2) >> 2) + 1; }
@@ -93,20 +101,81 @@ bool sprite_cel_build(sprite_cel *this, const uint8_t *pixels, int width,
   return true;
 }
 
-bool sprite_sheet_load(sprite_sheet *this, const sheet_source *const *sources,
-                       const char *name, char *error, size_t error_size) {
+bool sprite_sheet_load(sprite_sheet *this, const char *path, char *error,
+                       size_t error_size) {
   memset(this, 0, sizeof(*this));
 
-  if (!sources) {
-    snprintf(error, error_size, "no sprite sheets are available");
+  FILE *file = fopen(path, "rb");
+  if (!file) {
+    snprintf(error, error_size, "cannot open sprite sheet %s", path);
     return false;
   }
-  for (int i = 0; sources[i]; i++) {
-    if (!strcmp(sources[i]->name, name)) {
-      return sources[i]->build(this, error, error_size);
+
+  uint8_t header[SHEET_HEADER_SIZE];
+  if (fread(header, 1, sizeof(header), file) != sizeof(header) ||
+      memcmp(header, SHEET_MAGIC, 4) != 0) {
+    fclose(file);
+    snprintf(error, error_size, "%s is not a sprite sheet", path);
+    return false;
+  }
+
+  int width = (int)(header[4] | ((uint16_t)header[5] << 8));
+  int height = (int)(header[6] | ((uint16_t)header[7] << 8));
+  int count = (int)(header[8] | ((uint16_t)header[9] << 8));
+
+  if (width < 4 || width > SCREEN_WIDTH || height < 1 ||
+      height > SCREEN_HEIGHT) {
+    fclose(file);
+    snprintf(error, error_size, "%s has %dx%d cels, which do not fit", path,
+             width, height);
+    return false;
+  }
+  if (count < 1 || count > SPRITE_MAX_COUNT) {
+    fclose(file);
+    snprintf(error, error_size, "%s has %d cels, more than %d", path, count,
+             SPRITE_MAX_COUNT);
+    return false;
+  }
+
+  uint8_t transparent[SPRITE_MAX_COUNT];
+  if (fread(this->palette, 1, SPRITE_PALETTE_BYTES, file) !=
+          SPRITE_PALETTE_BYTES ||
+      fread(transparent, 1, (size_t)count, file) != (size_t)count) {
+    fclose(file);
+    snprintf(error, error_size, "%s ends inside its header", path);
+    return false;
+  }
+
+  size_t cel_bytes = (size_t)width * (size_t)height;
+  uint8_t *pixels = malloc(cel_bytes);
+  if (!pixels) {
+    fclose(file);
+    snprintf(error, error_size, "out of memory for %s", path);
+    return false;
+  }
+
+  this->count = count;
+  this->width = width;
+  this->height = height;
+
+  for (int cel = 0; cel < count; cel++) {
+    if (fread(pixels, 1, cel_bytes, file) != cel_bytes) {
+      free(pixels);
+      fclose(file);
+      snprintf(error, error_size, "%s ends after %d of %d cels", path, cel,
+               count);
+      return false;
+    }
+    if (!sprite_cel_build(&this->cel[cel], pixels, width, height,
+                          transparent[cel])) {
+      free(pixels);
+      fclose(file);
+      snprintf(error, error_size, "%s: cel %d could not be built", path, cel);
+      return false;
     }
   }
 
-  snprintf(error, error_size, "no sprite sheet named '%s'", name);
-  return false;
+  free(pixels);
+  fclose(file);
+  return true;
 }
