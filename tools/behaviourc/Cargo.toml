@@ -1,0 +1,11 @@
+[package]
+name = "behaviourc"
+version = "0.1.0"
+edition = "2021"
+description = "Compiler for the engine's total, non-recursive behaviour language"
+
+[[bin]]
+name = "behaviourc"
+path = "src/main.rs"
+
+[dependencies]

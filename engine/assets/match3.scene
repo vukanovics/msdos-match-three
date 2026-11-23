@@ -2,19 +2,32 @@
 #
 # Parsed when the scene loads. Every non-blank line is "key value"; anything
 # after '#' is a comment. Unknown keys fail at load time.
+#
+# The scene is the single source of truth for the world: the engine reads it,
+# the behaviour compiler reads it, and the compiled slot count is checked
+# against it at load.
 
 scene.name match3
 
-board.columns 10
-board.rows 10
-board.tile 24
+# A sheet name the game registers with the engine; see engine/src/match3_sheet.c
+sheet match3_tiles
 
-colors.background 253
-colors.cursor 254
-colors.picked 255
+# Entity pool. The behaviour program builds the board in it:
+#    0.. 99   board tiles, row * 10 + column
+#  100       selection cursor
+#  101       picked tile highlight
+#  102, 103  spare, for objects created while playing
+entities.count 104
 
-sprites.tiles.count 6
-sprites.tiles.width 24
-sprites.tiles.height 24
+color.background 253
 
 world.seed 4231
+
+# Named globals. These follow the entity pool, in this order, and are what the
+# behaviour program names with '@name' and '!name'.
+slot cursor-row 5
+slot cursor-column 5
+slot picked-row -1
+slot picked-column -1
+slot temp-a 0
+slot temp-b 0

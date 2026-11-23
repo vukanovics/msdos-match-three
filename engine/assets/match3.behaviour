@@ -1,0 +1,110 @@
+# Match-three behaviour.
+#
+# Total and non-recursive: definitions are inlined by the compiler and 'for' is
+# unrolled, so there is no recursion and every program terminates. State lives
+# in the scene's slot table; @name reads a slot and !name writes one, while bare
+# '@' and '!' take the slot index from the stack.
+#
+# The engine knows nothing about boards: it has an entity pool, and each entity
+# is a sprite, an x, a y and a flag word. Everything below - the grid, the
+# cursor, the picked tile - is built from that.
+#
+#   entity 0..99   board tiles, row * 10 + column
+#   entity 100     cursor box
+#   entity 101     picked tile box
+#
+# Positions are Q16.16, so a pixel is written as (pixels * 65536).
+
+# 24 * 65536: one cell, in fixed point.
+def cell
+  1572864
+end
+
+# Slot base of the board entity at (row, column) on the stack.
+def at
+  swap 10 * + 4 *
+end
+
+# Move the cursor entity to the cell the cursor globals point at.
+def place-cursor
+  @cursor-column 24 * 40 + 65536 *     # x
+  @cursor-row cell *                   # x y
+  402 !                                # store y
+  401 !                                # store x
+end
+
+def move-up
+  @cursor-row 1 - 0 max 9 min !cursor-row
+end
+
+def move-down
+  @cursor-row 1 + 0 max 9 min !cursor-row
+end
+
+def move-left
+  @cursor-column 1 - 0 max 9 min !cursor-column
+end
+
+def move-right
+  @cursor-column 1 + 0 max 9 min !cursor-column
+end
+
+# Show the picked box on the cursor cell and remember where that was.
+def pick
+  @cursor-row !picked-row
+  @cursor-column !picked-column
+  @cursor-column 24 * 40 + 65536 *     # x
+  @cursor-row cell *                   # x y
+  406 !                                # store y
+  405 !                                # store x
+  1 407 !                              # visible
+end
+
+def unpick
+  -1 !picked-row
+  -1 !picked-column
+  0 407 !                              # hidden
+end
+
+# Exchange the sprites of the picked and cursor entities. The two values are
+# read into temp slots first, because both writes need both reads.
+def swap-tiles
+  @cursor-row @cursor-column at @ !temp-a
+  @picked-row @picked-column at @ !temp-b
+  @temp-a @picked-row @picked-column at !
+  @temp-b @cursor-row @cursor-column at !
+end
+
+def toggle-pick
+  @picked-row 0 < [ pick ] [ swap-tiles unpick ] ifelse
+end
+
+# Build the world: lay out the board, then put the boxes in place. Called once.
+#
+# The index of each tile is pushed by 'for'; the body leaves nothing behind.
+def init
+  for 100 [
+    dup 4 * random 6 mod swap !                        # sprite
+    dup 10 mod 24 * 40 + 65536 * over 4 * 1 + !        # x
+    dup 10 / cell * over 4 * 2 + !                     # y
+    1 over 4 * 3 + !                                   # visible
+    drop
+  ]
+  6 400 !               # cursor sprite
+  7 404 !               # picked sprite
+  1 403 !               # cursor visible
+  place-cursor
+end
+
+# Keys arrive as BIOS scan codes for the arrows and 13 for return. `dup 72 =`
+# consumes the copy, so the key stays on the stack for the remaining tests and
+# the quotations must leave it alone; the final drop removes it.
+def on-key
+  dup 72 = [ move-up ] when
+  dup 80 = [ move-down ] when
+  dup 75 = [ move-left ] when
+  dup 77 = [ move-right ] when
+  dup 13 = [ toggle-pick ] when
+  drop
+  place-cursor
+end

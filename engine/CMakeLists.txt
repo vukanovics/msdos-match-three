@@ -1,11 +1,14 @@
 add_executable(match3
   src/main.c
+  src/engine.c
   src/clock.c
   src/scene.c
   src/state.c
+  src/sprite.c
   src/render.c
   src/diag.c
   src/vm.c
+  src/match3_sheet.c
 )
 set_target_properties(match3 PROPERTIES SUFFIX ".exe")
 target_include_directories(match3 PUBLIC include assets)
@@ -34,15 +37,17 @@ add_custom_command(
   VERBATIM
 )
 
+# The compiler reads the scene rather than a separate slot description, so the
+# layout has exactly one source of truth.
 set(BEHAVIOUR ${CMAKE_CURRENT_BINARY_DIR}/MATCH3.BC)
 add_custom_command(
   OUTPUT ${BEHAVIOUR}
   COMMAND ${BEHAVIOURC}
-          ${CMAKE_CURRENT_SOURCE_DIR}/assets/match3.slots
+          ${CMAKE_CURRENT_SOURCE_DIR}/assets/match3.scene
           ${CMAKE_CURRENT_SOURCE_DIR}/assets/match3.behaviour
           ${BEHAVIOUR}
   DEPENDS ${BEHAVIOURC}
-          ${CMAKE_CURRENT_SOURCE_DIR}/assets/match3.slots
+          ${CMAKE_CURRENT_SOURCE_DIR}/assets/match3.scene
           ${CMAKE_CURRENT_SOURCE_DIR}/assets/match3.behaviour
   COMMENT "Compiling match3.behaviour"
   VERBATIM

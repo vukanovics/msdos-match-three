@@ -9,15 +9,7 @@
 static void set_defaults(scene *this) {
   memset(this, 0, sizeof(*this));
   strcpy(this->name, "untitled");
-  this->columns = 10;
-  this->rows = 10;
-  this->tile_size = 24;
-  this->background = 253;
-  this->cursor = 254;
-  this->picked = 255;
-  this->sprite_count = 6;
-  this->sprite_width = 24;
-  this->sprite_height = 24;
+  this->background = 0;
   this->seed = 1;
 }
 
@@ -31,11 +23,86 @@ static bool parse_int(const char *value, int *result) {
   return true;
 }
 
-static bool assign(scene *this, const char *key, const char *value, char *error,
-                   size_t error_size, int line) {
+// Splits "name rest" into a name and a remainder, in place. Returns NULL when
+// there is no remainder, which is what a 'slot' line without an initial value
+// looks like.
+static char *split_word(char *text) {
+  char *at = text;
+  while (*at && *at != ' ' && *at != '\t') {
+    at++;
+  }
+  if (!*at) {
+    return NULL;
+  }
+  *at++ = '\0';
+  while (*at == ' ' || *at == '\t') {
+    at++;
+  }
+  return *at ? at : NULL;
+}
+
+static bool add_global(scene *this, char *value, char *error,
+                       size_t error_size, int line) {
+  char *name = value;
+  char *initial_text = split_word(value);
+  if (!initial_text) {
+    snprintf(error, error_size, "line %d: 'slot' needs 'slot <name> <value>'",
+             line);
+    return false;
+  }
+
+  if (*name == '@' || *name == '!') {
+    snprintf(error, error_size, "line %d: slot name '%s' must not start with @ "
+                                "or !",
+             line, name);
+    return false;
+  }
+  if (strlen(name) >= SCENE_NAME_MAX) {
+    snprintf(error, error_size, "line %d: slot name '%s' is too long", line,
+             name);
+    return false;
+  }
+  if (this->global_count >= SCENE_MAX_GLOBALS) {
+    snprintf(error, error_size, "line %d: more than %d slots", line,
+             SCENE_MAX_GLOBALS);
+    return false;
+  }
+  for (int i = 0; i < this->global_count; i++) {
+    if (!strcmp(this->global[i].name, name)) {
+      snprintf(error, error_size, "line %d: duplicate slot '%s'", line, name);
+      return false;
+    }
+  }
+
+  int initial;
+  if (!parse_int(initial_text, &initial)) {
+    snprintf(error, error_size, "line %d: slot '%s' needs a whole number, got "
+                                "'%s'",
+             line, name, initial_text);
+    return false;
+  }
+
+  scene_global *global = &this->global[this->global_count++];
+  strncpy(global->name, name, SCENE_NAME_MAX - 1);
+  global->name[SCENE_NAME_MAX - 1] = '\0';
+  global->initial = initial;
+  return true;
+}
+
+static bool assign(scene *this, const char *key, char *value, char *error,
+                   size_t error_size, int line, bool *seen_entities) {
+  if (!strcmp(key, "slot")) {
+    return add_global(this, value, error, error_size, line);
+  }
+
   if (!strcmp(key, "scene.name")) {
     strncpy(this->name, value, SCENE_NAME_MAX - 1);
     this->name[SCENE_NAME_MAX - 1] = '\0';
+    return true;
+  }
+  if (!strcmp(key, "sheet")) {
+    strncpy(this->sheet, value, SCENE_NAME_MAX - 1);
+    this->sheet[SCENE_NAME_MAX - 1] = '\0';
     return true;
   }
 
@@ -46,24 +113,11 @@ static bool assign(scene *this, const char *key, const char *value, char *error,
     return false;
   }
 
-  if (!strcmp(key, "board.columns")) {
-    this->columns = number;
-  } else if (!strcmp(key, "board.rows")) {
-    this->rows = number;
-  } else if (!strcmp(key, "board.tile")) {
-    this->tile_size = number;
-  } else if (!strcmp(key, "colors.background")) {
+  if (!strcmp(key, "entities.count")) {
+    this->entity_count = number;
+    *seen_entities = true;
+  } else if (!strcmp(key, "color.background")) {
     this->background = (uint8_t)number;
-  } else if (!strcmp(key, "colors.cursor")) {
-    this->cursor = (uint8_t)number;
-  } else if (!strcmp(key, "colors.picked")) {
-    this->picked = (uint8_t)number;
-  } else if (!strcmp(key, "sprites.tiles.count")) {
-    this->sprite_count = number;
-  } else if (!strcmp(key, "sprites.tiles.width")) {
-    this->sprite_width = number;
-  } else if (!strcmp(key, "sprites.tiles.height")) {
-    this->sprite_height = number;
   } else if (!strcmp(key, "world.seed")) {
     this->seed = (uint32_t)number;
   } else {
@@ -74,7 +128,7 @@ static bool assign(scene *this, const char *key, const char *value, char *error,
 }
 
 static bool parse_line(scene *this, char *line, char *error, size_t error_size,
-                       int line_number) {
+                       int line_number, bool *seen_entities) {
   char *comment = strchr(line, '#');
   if (comment) {
     *comment = '\0';
@@ -112,21 +166,23 @@ static bool parse_line(scene *this, char *line, char *error, size_t error_size,
     return false;
   }
 
-  return assign(this, key, value, error, error_size, line_number);
+  return assign(this, key, value, error, error_size, line_number,
+                seen_entities);
 }
 
-static bool validate(const scene *this, char *error, size_t error_size) {
-  if (this->columns < 3 || this->columns > SCENE_MAX_COLUMNS) {
-    snprintf(error, error_size, "board.columns must be 3..%d",
-             SCENE_MAX_COLUMNS);
+static bool validate(const scene *this, bool seen_entities, char *error,
+                     size_t error_size) {
+  if (!seen_entities) {
+    snprintf(error, error_size, "missing 'entities.count'");
     return false;
   }
-  if (this->rows < 3 || this->rows > SCENE_MAX_ROWS) {
-    snprintf(error, error_size, "board.rows must be 3..%d", SCENE_MAX_ROWS);
+  if (this->entity_count < 0 || this->entity_count > SCENE_MAX_ENTITIES) {
+    snprintf(error, error_size, "entities.count must be 0..%d",
+             SCENE_MAX_ENTITIES);
     return false;
   }
-  if (this->tile_size < 4 || this->tile_size > 64) {
-    snprintf(error, error_size, "board.tile must be 4..64");
+  if (!this->sheet[0]) {
+    snprintf(error, error_size, "missing 'sheet'");
     return false;
   }
   return true;
@@ -144,10 +200,11 @@ bool scene_load(scene *this, const char *path, char *error, size_t error_size) {
   char line[LINE_MAX_LENGTH];
   int number = 0;
   bool ok = true;
+  bool seen_entities = false;
 
   while (fgets(line, sizeof(line), file)) {
     number++;
-    if (!parse_line(this, line, error, error_size, number)) {
+    if (!parse_line(this, line, error, error_size, number, &seen_entities)) {
       // Prefix the line number only when the error has none yet.
       if (strncmp(error, "line ", 5) != 0) {
         char detail[96];
@@ -162,15 +219,26 @@ bool scene_load(scene *this, const char *path, char *error, size_t error_size) {
   fclose(file);
 
   if (ok) {
-    ok = validate(this, error, error_size);
+    ok = validate(this, seen_entities, error, error_size);
   }
   return ok;
 }
 
+int scene_slot_count(const scene *this) {
+  return this->entity_count * ENTITY_STRIDE + this->global_count;
+}
+
+int scene_slot_of(const scene *this, const char *name) {
+  for (int i = 0; i < this->global_count; i++) {
+    if (!strcmp(this->global[i].name, name)) {
+      return this->entity_count * ENTITY_STRIDE + i;
+    }
+  }
+  return -1;
+}
+
 void scene_describe(const scene *this, char *buffer, size_t buffer_size) {
-  snprintf(buffer, buffer_size,
-           "scene %s %dx%d tile %d sprites %d@%dx%d seed %lu",
-           this->name, this->columns, this->rows, this->tile_size,
-           this->sprite_count, this->sprite_width, this->sprite_height,
+  snprintf(buffer, buffer_size, "scene %s sheet %s entities %d slots %d seed %lu",
+           this->name, this->sheet, this->entity_count, scene_slot_count(this),
            (unsigned long)this->seed);
 }

@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "engine/scene.h"
+#include "engine/sprite.h"
 #include "engine/state.h"
 
 ///
@@ -13,19 +14,19 @@
 ///
 typedef struct {
   uint32_t clear_us;
-  uint32_t tiles_us;
-  uint32_t border_us;
+  uint32_t sprites_us;
 } render_stats;
 
 void render_last_stats(render_stats *stats);
 
 ///
-/// @brief Prepares the tile sheet and palette for @p scene.
+/// @brief Prepares the palette and the draw state for @p scene.
 ///
-/// @return false when the scene does not describe the sprite sheet the engine
-/// was built with.
+/// The renderer draws whatever the entity pool says: it has no notion of a
+/// board, a tile or a cursor, only of sprites at positions.
 ///
-bool render_init(const scene *scene, char *error, size_t error_size);
+bool render_init(const scene *scene, const sprite_sheet *sheet, char *error,
+                 size_t error_size);
 
 ///
 /// @brief Draws one frame of @p state into the page at @p page_base.

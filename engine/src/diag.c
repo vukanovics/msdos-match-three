@@ -74,20 +74,27 @@ void diag_state(const scene *scene, const world_state *state) {
   scene_describe(scene, description, sizeof(description));
 
   fprintf(file, "state %s\n", description);
-  fprintf(file, "  checksum %08lx cursor %ld,%ld picked %ld,%ld\n",
-          (unsigned long)state_checksum(state),
-          (long)state->slot[SLOT_CURSOR_ROW],
-          (long)state->slot[SLOT_CURSOR_COLUMN],
-          (long)state->slot[SLOT_PICKED_ROW],
-          (long)state->slot[SLOT_PICKED_COLUMN]);
+  fprintf(file, "  checksum %08lx\n",
+          (unsigned long)state_checksum(state, scene_slot_count(scene)));
 
-  for (int row = 0; row < scene->rows; row++) {
-    fprintf(file, "  row %2d:", row);
-    for (int column = 0; column < scene->columns; column++) {
-      fprintf(file, " %2ld",
-              (long)state->slot[SLOT_TILE(row, column)]);
+  // The entity pool, in the engine's own terms: a sprite at a position. Only
+  // the visible ones are worth a line.
+  for (int entity = 0; entity < scene->entity_count; entity++) {
+    const int32_t *slots = &state->slot[entity * ENTITY_STRIDE];
+    if (!(slots[ENTITY_FLAGS] & ENTITY_VISIBLE)) {
+      continue;
     }
-    fprintf(file, "\n");
+    fprintf(file, "  entity %3d sprite %2ld x %ld y %ld flags %02lx\n", entity,
+            (long)slots[ENTITY_SPRITE],
+            (long)(slots[ENTITY_X] >> ENTITY_FIXED_SHIFT),
+            (long)(slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT),
+            (unsigned long)(slots[ENTITY_FLAGS] & 0xffffL));
+  }
+
+  int base = scene->entity_count * ENTITY_STRIDE;
+  for (int i = 0; i < scene->global_count; i++) {
+    fprintf(file, "  slot %-16s %ld\n", scene->global[i].name,
+            (long)state->slot[base + i]);
   }
   fclose(file);
 }
