@@ -29,5 +29,26 @@ slot cursor-row 5
 slot cursor-column 5
 slot picked-row -1
 slot picked-column -1
+
+# Scratch shared by the behaviour's helper definitions.
 slot temp-a 0
 slot temp-b 0
+slot temp-c 0
+slot temp-d 0
+
+# The state machine: 0 idle, 1 swapping, 2 clearing, 3 falling.
+slot phase 0
+slot timer 0
+slot step-x 0
+slot step-y 0
+slot moving 0
+slot matches 0
+
+# Set when the board may contain a run; cleared once it has been scanned. While
+# it is clear the idle tick costs nothing, which is most of the time.
+slot dirty 1
+
+# Per-entity state the behaviour program keeps for itself. The engine has no
+# idea these exist; they are just more slots after the entity pool.
+#   velocityN  how many Q16.16 pixels entity N is falling this tick
+array velocity 104 0

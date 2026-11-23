@@ -1,36 +1,73 @@
 # Match-three behaviour.
 #
 # Total and non-recursive: definitions are inlined by the compiler and 'for' is a
-# counted loop, so there is no recursion and every program terminates. State lives
-# in the scene's slot table; @name reads a slot and !name writes one, while bare
-# '@' and '!' take the slot index from the stack.
+# counted loop, so there is no recursion and every program terminates. State
+# lives in the scene's slot table; @name reads a slot and !name writes one, while
+# bare '@' and '!' take the slot index from the stack and '&name' pushes it.
 #
 # The engine knows nothing about boards: it has an entity pool, and each entity
 # is a sprite, an x, a y and a flag word. Everything below - the grid, the
-# cursor, the picked tile - is built from that.
+# cursor, the falling - is built from that.
 #
-#   entity 0..99   board tiles, row * 10 + column
+#   entity 0..99   board cells, row * 10 + column
 #   entity 100     cursor box
 #   entity 101     picked tile box
 #
+# A cell's resting position comes from its own index, so a tile that is falling
+# only needs its current y: the entity drifts back towards row * cell. Because
+# of that, a cell's y is not always row * cell - mid-animation it is wherever
+# the tile it holds really is.
+#
 # Positions are Q16.16, so a pixel is written as (pixels * 65536).
 
-# 24 * 65536: one cell, in fixed point.
+# 24 * 65536, one cell in fixed point.
 def cell
   1572864
 end
 
-# Slot base of the board entity at (row, column) on the stack.
+# 40 * 65536: where the board starts horizontally.
+def origin-x
+  2621440
+end
+
+# Acceleration, Q16.16 pixels per tick per tick. 1500 px/s^2 over 1/60 s ticks is
+# 0.4167 px/tick^2, so a tile falls the height of the board in about half a
+# second, which is the pace the original game was tuned to.
+def gravity
+  27307
+end
+
+# One cell per ten ticks, so a swap takes a sixth of a second.
+def swap-step
+  157286
+end
+
+# Land a freshly spawned tile one whole board above its row.
+def above-board
+  15728640
+end
+
+# Slot index of the velocity array, so it can be indexed at run time.
+def vel-base
+  &velocity0
+end
+
+# Slot base of the board cell at (row, column) on the stack.
 def at
   swap 10 * + 4 *
 end
 
+# |x|
+def abs
+  dup 0 < [ neg ] when
+end
+
 # Move the cursor entity to the cell the cursor globals point at.
 def place-cursor
-  @cursor-column 24 * 40 + 65536 *     # x
-  @cursor-row cell *                   # x y
-  402 !                                # store y
-  401 !                                # store x
+  @cursor-column cell * origin-x +          # x
+  @cursor-row cell *                      # x y
+  402 !                                   # store y
+  401 !                                   # store x
 end
 
 def move-up
@@ -53,21 +90,21 @@ end
 def pick
   @cursor-row !picked-row
   @cursor-column !picked-column
-  @cursor-column 24 * 40 + 65536 *     # x
-  @cursor-row cell *                   # x y
-  406 !                                # store y
-  405 !                                # store x
-  1 407 !                              # visible
+  @cursor-column cell * origin-x +          # x
+  @cursor-row cell *                      # x y
+  406 !                                   # store y
+  405 !                                   # store x
+  1 407 !                                 # visible
 end
 
 def unpick
   -1 !picked-row
   -1 !picked-column
-  0 407 !                              # hidden
+  0 407 !                                 # hidden
 end
 
-# Exchange the sprites of the picked and cursor entities. The two values are
-# read into temp slots first, because both writes need both reads.
+# Exchange the sprites of the picked and cursor cells. The two values are read
+# into temp slots first, because both writes need both reads.
 def swap-tiles
   @cursor-row @cursor-column at @ !temp-a
   @picked-row @picked-column at @ !temp-b
@@ -75,17 +112,187 @@ def swap-tiles
   @temp-b @cursor-row @cursor-column at !
 end
 
-def toggle-pick
-  @picked-row 0 < [ pick ] [ swap-tiles unpick ] ifelse
+# Only neighbours may be swapped.
+def adjacent
+  @picked-row @cursor-row - abs
+  @picked-column @cursor-column - abs
+  + 1 =
+end
+
+# Slide the two cells towards each other; the sprites change hands at the end.
+def swap-start
+  @cursor-row @cursor-column at !temp-a
+  @picked-row @picked-column at !temp-b
+  @picked-column @cursor-column - swap-step * !step-x
+  @picked-row @cursor-row - swap-step * !step-y
+  0 407 !                                 # hide the picked box while it slides
+  10 !timer
+  1 !phase
+end
+
+def swap-tick
+  @temp-a 1 + @ @step-x + @temp-a 1 + !
+  @temp-a 2 + @ @step-y + @temp-a 2 + !
+  0 @step-x - @temp-b 1 + @ + @temp-b 1 + !
+  0 @step-y - @temp-b 2 + @ + @temp-b 2 + !
+  @timer 1 - !timer
+  @timer 0 <= [ swap-finish ] when
+end
+
+def swap-finish
+  @cursor-column cell * origin-x + @temp-a 1 + !
+  @cursor-row cell * @temp-a 2 + !
+  @picked-column cell * origin-x + @temp-b 1 + !
+  @picked-row cell * @temp-b 2 + !
+  swap-tiles
+  unpick
+  1 !dirty
+  0 !phase
+end
+
+# If the three cells starting at i, stepping by s *slots*, hold the same tile,
+# mark all three. Leaves i on the stack so the caller can go on using it.
+#
+# i is an entity index, so its sprite is at slot i * 4; s is already a slot
+# stride (4 across, 40 down) because that is what is added to it.
+def mark3
+  !temp-b                                 # temp-b is the slot stride
+  dup 4 * !temp-d                         # temp-d is the slot base of i
+  @temp-d @ !temp-a                       # temp-a is the tile
+  @temp-d @temp-b + @ @temp-a =           # i a
+  @temp-d 2 @temp-b * + @ @temp-a =       # i a b
+  and @temp-a 0 >= and                    # i matched
+  [
+    3 @temp-d 3 + !
+    3 @temp-d @temp-b + 3 + !
+    3 @temp-d 2 @temp-b * + 3 + !
+    1 !matches
+  ] when
+end
+
+# A cell that is part of a run has flags 3: visible, and marked.
+def match-pass
+  0 !matches
+  for 100 [
+    dup 10 mod 8 < [ 4 mark3 ] when
+    dup 10 / 8 < [ 40 mark3 ] when
+    drop
+  ]
+end
+
+# Hide every marked cell.
+def clear-pass
+  for 100 [
+    dup 4 * 3 + @ 3 =
+    [
+      -1 over 4 * !
+      1 over 4 * 3 + !
+    ] when
+    drop
+  ]
+end
+
+# Move the tile above an empty cell down into it, remembering where it came from
+# so the fall animates from there.
+def pull-down
+  dup 10 - !temp-a                        # temp-a is the cell above
+  vel-base over + !temp-d                 # temp-d is velocity[i]
+  @temp-a 4 * @ over 4 * !                # sprite
+  @temp-a 4 * 2 + @ over 4 * 2 + !        # y
+  vel-base @temp-a + @ !temp-c            # temp-c is velocity[i - 10]
+  @temp-c @temp-d !
+  0 vel-base @temp-a + !
+  -1 @temp-a 4 * !                        # the tile left its old cell
+end
+
+# Ten passes is enough to settle a ten row column completely.
+def collapse-pass
+  for 10 [
+    for 100 [
+      dup 10 >= [
+        dup 4 * @ 0 <
+        over 10 - 4 * @ 0 >=
+        and
+        [ pull-down ] when
+      ] when
+      drop
+    ]
+    drop
+  ]
+end
+
+# New tiles enter from above the board, keeping their spacing, so a refilled
+# column reads as one stack falling in.
+def refill-pass
+  for 100 [
+    dup 4 * @ 0 <
+    [
+      random 6 mod over 4 * !
+      dup 10 / cell * above-board - over 4 * 2 + !
+      vel-base over + !temp-d
+      0 @temp-d !
+      1 over 4 * 3 + !
+    ] when
+    drop
+  ]
+end
+
+# One tick of gravity for one cell. Leaves i on the stack.
+def fall-entity
+  dup 10 / cell * !temp-b                 # temp-b is where it comes to rest
+  vel-base over + !temp-d                 # temp-d is velocity[i]
+  dup 4 * 2 + @ !temp-c                   # temp-c is y
+  @temp-c @temp-b < [
+    @temp-d @ gravity + @temp-d !
+    @temp-c @temp-d @ + !temp-c
+    @temp-c @temp-b >= [
+      @temp-b !temp-c
+      0 @temp-d !
+    ] when
+    1 !moving
+  ] when
+  @temp-c over 4 * 2 + !
+end
+
+def fall-tick
+  0 !moving
+  for 100 [ fall-entity drop ]
+  @moving 0 = [ 0 !phase 1 !dirty ] when
+end
+
+def clear-tick
+  @timer 1 - !timer
+  @timer 0 <= [
+    clear-pass
+    collapse-pass
+    refill-pass
+    3 !phase
+  ] when
+end
+
+def idle-tick
+  @dirty 0 >
+  [
+    match-pass
+    0 !dirty
+    @matches 0 > [ 8 !timer 2 !phase ] when
+  ] when
+end
+
+def tick
+  @phase 0 = [ idle-tick ] when
+  @phase 1 = [ swap-tick ] when
+  @phase 2 = [ clear-tick ] when
+  @phase 3 = [ fall-tick ] when
 end
 
 # Build the world: lay out the board, then put the boxes in place. Called once.
 #
-# The index of each tile is pushed by 'for'; the body leaves nothing behind.
+# The index of each cell is pushed by 'for'; the body leaves nothing behind.
 def init
   for 100 [
     dup 4 * random 6 mod swap !                        # sprite
-    dup 10 mod 24 * 40 + 65536 * over 4 * 1 + !        # x
+    dup 10 mod cell * origin-x + over 4 * 1 + !          # x
     dup 10 / cell * over 4 * 2 + !                     # y
     1 over 4 * 3 + !                                   # visible
     drop
@@ -99,12 +306,26 @@ end
 # Keys arrive as BIOS scan codes for the arrows and 13 for return. `dup 72 =`
 # consumes the copy, so the key stays on the stack for the remaining tests and
 # the quotations must leave it alone; the final drop removes it.
+#
+# Input is ignored while the board is animating, so a key cannot land in the
+# middle of a swap or a cascade.
 def on-key
-  dup 72 = [ move-up ] when
-  dup 80 = [ move-down ] when
-  dup 75 = [ move-left ] when
-  dup 77 = [ move-right ] when
-  dup 13 = [ toggle-pick ] when
-  drop
-  place-cursor
+  @phase 0 = [
+    dup 72 = [ move-up ] when
+    dup 80 = [ move-down ] when
+    dup 75 = [ move-left ] when
+    dup 77 = [ move-right ] when
+    dup 13 = [ toggle-pick ] when
+    drop
+    place-cursor
+  ] [ drop ] ifelse
+end
+
+# Return picks a tile; return on a neighbour starts the swap, and on anything
+# else moves the pick instead of clearing it.
+def toggle-pick
+  @picked-row 0 <
+    [ pick ]
+    [ adjacent [ swap-start ] [ pick ] ifelse ]
+  ifelse
 end

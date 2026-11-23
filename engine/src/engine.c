@@ -169,6 +169,9 @@ int engine_main(const char *scene_path, const char *behaviour_path,
                    "init")) {
     behaviour_faulted = 1;
   }
+  // The world as init left it, before the first tick: the starting point every
+  // later frame is compared against.
+  diag_state(&description, &state);
 
   // Put a finished frame on screen before entering the loop. Draw into the page
   // that is not being displayed (the mode set leaves the display on page 0), so
