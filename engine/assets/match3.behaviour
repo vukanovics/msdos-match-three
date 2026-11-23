@@ -14,7 +14,8 @@
 #   slot 3   flags: bit 0 visible, bit 1 marked for clearing
 #   slot 4   which cel of the animation is showing
 #
-# The engine steps the cel of every entity once every animation.ticks frames. A
+# The engine steps the cel of every processed entity once that animation's tick
+# count has elapsed. A
 # looping run wraps round; a run that does not loop stops on its last cel and the
 # engine calls on-animation-end with the entity index, so "play this once" is
 # just "set the animation and the cel to 0" - the end takes care of itself.
@@ -63,7 +64,7 @@ end
 # ENTITY_STRIDE in the engine, and the behaviour has to agree with it because it
 # addresses the pool arithmetically.
 def stride
-  5
+  7
 end
 
 def slot-x
@@ -82,18 +83,61 @@ def slot-frame
   4
 end
 
+def slot-layer
+  5
+end
+
+def slot-phase
+  6
+end
+
+# Flag bits. The engine reads the first two; the rest are the game's.
+def flag-visible
+  1
+end
+
+def flag-process
+  2
+end
+
+def flag-marked
+  4
+end
+
+# What a gem on the board carries, and what a marked one carries.
+def gem-flags
+  flag-visible flag-process +
+end
+
+def marked-flags
+  gem-flags flag-marked +
+end
+
+# Draw order: the gems first, then the boxes over them.
+def layer-board
+  0
+end
+
+def layer-ui
+  1
+end
+
 # Slot base of the two box entities (100 and 101), which the behaviour owns.
 def cursor-base
-  500
+  700
 end
 
 def picked-base
-  505
+  707
 end
 
-# Ticks a cel is held for. Must match animation.ticks in the scene, which the
-# behaviour compiler does not read.
-def ticks
+# Ticks each cel is held for. The scene gives every animated sprite its own rate;
+# these two must match it, and the behaviour compiler does not read the scene's.
+def idle-ticks
+  4
+end
+
+def glimmer-ticks
   4
 end
 
@@ -112,7 +156,7 @@ end
 
 # Ticks one glimmer lasts: the whole glimmer run, played once.
 def glimmer-length
-  240
+  glimmer-ticks idle-frames *
 end
 
 # Ticks between glimmer rolls, at least this many plus the spread. Shorter than a
@@ -158,12 +202,15 @@ end
 
 # Show animation h from cel n. i h cel -> i
 #
-# The animation slot is the first field, so it needs no offset. n has to go
-# through a temp: i is three deep by the time both stores are made.
+# The animation slot is the first field, so it needs no offset. Both values have
+# to go through temps: i is three deep by the time the stores are made. The
+# engine's tick countdown is cleared with it, so the first cel gets its whole
+# turn rather than whatever was left of the previous animation's.
 def play
   !temp-a
   over stride * !
   @temp-a over stride * slot-frame + !
+  0 over stride * slot-phase + !
 end
 
 # Give entity i its idle animation, from the first cel.
@@ -215,7 +262,7 @@ def pick
   @cursor-row cell *                      # x y
   picked-base slot-y + !                  # store y
   picked-base slot-x + !                  # store x
-  1 picked-base slot-flags + !            # visible
+  gem-flags picked-base slot-flags + !    # visible
 end
 
 def unpick
@@ -300,9 +347,9 @@ end
 
 # Mark the three cells starting at i, stepping by the number of cells in temp-b.
 def mark-run
-  3 over stride * slot-flags + !
-  3 over @temp-b + stride * slot-flags + !
-  3 over @temp-b 2 * + stride * slot-flags + !
+  marked-flags over stride * slot-flags + !
+  marked-flags over @temp-b + stride * slot-flags + !
+  marked-flags over @temp-b 2 * + stride * slot-flags + !
   1 !matches
 end
 
@@ -332,10 +379,10 @@ end
 # Hide every marked cell.
 def clear-pass
   for 100 [
-    dup stride * slot-flags + @ 3 =
+    dup stride * slot-flags + @ flag-marked and
     [
       -1 over stride * !
-      1 over stride * slot-flags + !
+      gem-flags over stride * slot-flags + !
     ] when
     drop
   ]
@@ -384,7 +431,7 @@ def refill-pass
       dup 10 / cell * above-board - over stride * slot-y + !
       vel-base over + !temp-d
       0 @temp-d !
-      1 over stride * slot-flags + !
+      gem-flags over stride * slot-flags + !
     ] when
     drop
   ]
@@ -477,12 +524,15 @@ def init
     play-idle-here
     dup 10 mod cell * origin-x + over stride * slot-x + !
     dup 10 / cell * over stride * slot-y + !
-    1 over stride * slot-flags + !
+    layer-board over stride * slot-layer + !
+    gem-flags over stride * slot-flags + !
     drop
   ]
-  $cursor cursor-base !         # cursor animation
-  $picked picked-base !         # picked animation
-  1 cursor-base slot-flags + !  # cursor visible
+  $cursor cursor-base !                      # cursor animation
+  $picked picked-base !                      # picked animation
+  layer-ui cursor-base slot-layer + !
+  layer-ui picked-base slot-layer + !
+  gem-flags cursor-base slot-flags + !       # cursor visible
   place-cursor
 end
 

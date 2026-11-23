@@ -78,6 +78,7 @@ typedef struct {
 typedef struct {
   int first_cel;
   int frames;
+  int ticks; // ticks each cel is held for
   bool loop;
 } sprite_anim;
 

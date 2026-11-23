@@ -178,6 +178,46 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
   }
 }
 
+// Entities are drawn layer by layer, lowest first, and within a layer in index
+// order. Counting sort rather than a comparison sort because the keys are small
+// and bounded: one pass to count, one to place, and the order is stable for
+// free, which is what keeps the within-layer ordering the same every frame.
+static int order[SCENE_MAX_ENTITIES];
+
+static int build_draw_order(const scene *scene, const world_state *state) {
+  int counts[SCENE_MAX_LAYERS + 1];
+  for (int layer = 0; layer <= SCENE_MAX_LAYERS; layer++) {
+    counts[layer] = 0;
+  }
+  for (int entity = 0; entity < scene->entity_count; entity++) {
+    int layer = state->slot[entity * ENTITY_STRIDE + ENTITY_LAYER];
+    if (layer < 0) {
+      layer = 0;
+    } else if (layer >= SCENE_MAX_LAYERS) {
+      layer = SCENE_MAX_LAYERS - 1;
+    }
+    counts[layer + 1]++;
+  }
+  for (int layer = 0; layer < SCENE_MAX_LAYERS; layer++) {
+    counts[layer + 1] += counts[layer];
+  }
+
+  int next[SCENE_MAX_LAYERS];
+  for (int layer = 0; layer < SCENE_MAX_LAYERS; layer++) {
+    next[layer] = counts[layer];
+  }
+  for (int entity = 0; entity < scene->entity_count; entity++) {
+    int layer = state->slot[entity * ENTITY_STRIDE + ENTITY_LAYER];
+    if (layer < 0) {
+      layer = 0;
+    } else if (layer >= SCENE_MAX_LAYERS) {
+      layer = SCENE_MAX_LAYERS - 1;
+    }
+    order[next[layer]++] = entity;
+  }
+  return scene->entity_count;
+}
+
 void render_frame(const scene *scene, sprite_set *source,
                   const world_state *state, size_t page_base) {
   uint8_t *vram = video_memory();
@@ -187,8 +227,9 @@ void render_frame(const scene *scene, sprite_set *source,
   clear_page(vram, page_base, scene->background);
   uint32_t after_clear = clock_us();
 
-  for (int entity = 0; entity < scene->entity_count; entity++) {
-    const int32_t *slots = &state->slot[entity * ENTITY_STRIDE];
+  int drawn = build_draw_order(scene, state);
+  for (int at = 0; at < drawn; at++) {
+    const int32_t *slots = &state->slot[order[at] * ENTITY_STRIDE];
     if (!(slots[ENTITY_FLAGS] & ENTITY_VISIBLE)) {
       continue;
     }

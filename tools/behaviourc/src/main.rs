@@ -57,7 +57,7 @@ const OP_JZ: u8 = 0x47;
 const MAGIC: &[u8; 4] = b"BC03";
 // Must match ENTITY_STRIDE in engine/include/engine/slots.h: the compiler bakes
 // the entity pool's size into every slot index it emits.
-const ENTITY_STRIDE: i32 = 5;
+const ENTITY_STRIDE: i32 = 7;
 const MAX_INLINE_DEPTH: usize = 32;
 
 // 'for' is a counted loop whose count is a literal, which is what keeps it
@@ -168,20 +168,29 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
             if sprites.iter().any(|(existing, _)| existing == &name) {
                 return Err(format!("duplicate sprite '{name}'"));
             }
-            // Only an animated sprite names a frame count; later tokens say how
-            // it plays ('loop') and how it is loaded ('resident'), and do not
-            // change the layout the compiler bakes in.
-            let frames: i32 = if animated {
-                parts
+            // Only an animated sprite names a cel count and a tick rate; later
+            // tokens say how it plays ('loop') and how it is loaded
+            // ('resident'), and do not change the layout the compiler bakes in.
+            let (frames, ticks): (i32, i32) = if animated {
+                let frames = parts
                     .next()
-                    .ok_or("'animatedsprite' needs a frame count")?
+                    .ok_or("'animatedsprite' needs a cel count")?
                     .parse()
-                    .map_err(|_| "'animatedsprite' needs a whole frame count")?
+                    .map_err(|_| "'animatedsprite' needs a whole cel count")?;
+                let ticks = parts
+                    .next()
+                    .ok_or("'animatedsprite' needs a tick count")?
+                    .parse()
+                    .map_err(|_| "'animatedsprite' needs a whole tick count")?;
+                (frames, ticks)
             } else {
-                1
+                (1, 0)
             };
             if frames < 1 {
-                return Err(format!("sprite '{name}' needs a frame count of 1 or more"));
+                return Err(format!("sprite '{name}' needs a cel count of 1 or more"));
+            }
+            if animated && ticks < 1 {
+                return Err(format!("sprite '{name}' needs a tick count of 1 or more"));
             }
             let count = sheets
                 .iter()

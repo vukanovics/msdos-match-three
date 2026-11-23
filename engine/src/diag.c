@@ -85,8 +85,9 @@ void diag_state(const scene *scene, const world_state *state) {
       continue;
     }
     fprintf(file,
-            "  entity %3d anim %2ld frame %2ld x %ld y %ld flags %02lx\n",
-            entity, (long)slots[ENTITY_ANIMATION], (long)slots[ENTITY_FRAME],
+            "  entity %3d layer %2ld anim %2ld frame %2ld x %ld y %ld flags %02lx\n",
+            entity, (long)slots[ENTITY_LAYER], (long)slots[ENTITY_ANIMATION],
+            (long)slots[ENTITY_FRAME],
             (long)(slots[ENTITY_X] >> ENTITY_FIXED_SHIFT),
             (long)(slots[ENTITY_Y] >> ENTITY_FIXED_SHIFT),
             (unsigned long)(slots[ENTITY_FLAGS] & 0xffffL));

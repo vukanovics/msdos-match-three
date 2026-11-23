@@ -132,10 +132,21 @@ int main(int argc, char **argv) {
   int kind_slot = scene_slot_of(&description, "kind0");
   int phase_slot = scene_slot_of(&description, "phase");
   int dirty_slot = scene_slot_of(&description, "dirty");
-  if (kind_slot < 0 || phase_slot < 0 || dirty_slot < 0) {
+  int next_roll_slot = scene_slot_of(&description, "next-roll");
+  if (kind_slot < 0 || phase_slot < 0 || dirty_slot < 0 ||
+      next_roll_slot < 0) {
     printf("the scene is missing a slot this check needs\n");
     return 1;
   }
+
+  // One cell is taken out of the animation loop part way through, to check that
+  // clearing ENTITY_PROCESS really does leave it alone while its neighbours keep
+  // animating. Glimmer rolls are pushed out of the way so that the only thing
+  // that could change a cel is the engine's own step.
+  long frozen_at = -1;
+  int frozen_frame = 0;
+  int neighbour_frame = 0;
+  int frozen_runs = 0;
 
   long started = 0;
   long concurrent = 0;
@@ -149,8 +160,8 @@ int main(int argc, char **argv) {
   }
 
   for (long tick = 0; tick < TICKS; tick++) {
-    // Same order as the engine: step the cels, then input, then the tick.
-    if (!anim_advance(&description, &state, (uint32_t)tick, &machine)) {
+    // Same order as the engine: step the animations, then input, then the tick.
+    if (!anim_advance(&description, &state, &machine)) {
       printf("tick %ld: animation-end: %s\n", tick,
              machine.error ? machine.error : "unknown");
       return 1;
@@ -163,6 +174,27 @@ int main(int argc, char **argv) {
     if (!vm_tick(&machine)) {
       printf("tick %ld: %s\n", tick, machine.error ? machine.error : "unknown");
       return 1;
+    }
+
+    if (frozen_at < 0 && tick == 3000 && state.slot[phase_slot] == 0 &&
+        state.slot[dirty_slot] == 0) {
+      frozen_at = tick;
+      frozen_frame = frame_of(&state, 0);
+      neighbour_frame = frame_of(&state, 1);
+      state.slot[ENTITY_FLAGS] &= ~ENTITY_PROCESS; // cell 0's flags slot
+      state.slot[next_roll_slot] = state.slot[next_roll_slot] + 30;
+    } else if (frozen_at >= 0 && tick == frozen_at + 20) {
+      if (frame_of(&state, 0) != frozen_frame) {
+        printf("tick %ld: a cell with no process bit still animated\n", tick);
+        return 1;
+      }
+      if (frame_of(&state, 1) == neighbour_frame) {
+        printf("tick %ld: a processed neighbour did not animate\n", tick);
+        return 1;
+      }
+      state.slot[ENTITY_FLAGS] |= ENTITY_PROCESS;
+      frozen_at = -1;
+      frozen_runs++;
     }
 
     int glimmering = 0;
@@ -292,8 +324,9 @@ int main(int argc, char **argv) {
 
   printf("ok %d ticks, %ld glimmers started and %ld finished, at most %ld at "
          "once, longest %ld ticks, %ld ticks with two or more, %ld tick-pairs "
-         "of one kind, checksum %08lx\n",
+         "of one kind, %d process-bit checks, checksum %08lx\n",
          TICKS, started, glimmers_seen, most, longest, concurrent, same_kind,
+         frozen_runs,
          (unsigned long)state_checksum(&state, scene_slot_count(&description)));
   return 0;
 }

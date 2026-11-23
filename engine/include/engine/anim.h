@@ -9,24 +9,25 @@
 #include "engine/vm.h"
 
 ///
-/// @brief Steps every entity's cel, and reports the runs that end.
+/// @brief One frame of the engine's animation clock.
 ///
 /// Animation is world state: an entity names an animation and the cel it is
-/// showing, and the engine moves the cel along. A run that loops wraps round; a
-/// run that does not loop stops on its last cel, and arriving there is the
-/// event - the behaviour's on-animation-end entry is called with the entity, so
-/// "play this once, then go back to idle" needs no bookkeeping in the program.
+/// showing, and the engine moves the cel along. Each animation holds its cels
+/// for its own tick count, so every entity carries a small countdown.
 ///
-/// Every entity steps on the same tick, once per @c scene->animation_ticks
-/// frames. An animation started between steps shows its first cel for the rest
-/// of the quantum, which is at most a couple of frames.
+/// A run that loops wraps round; a run that does not loop stops on its last cel,
+/// and arriving there is the event - the behaviour's on-animation-end entry is
+/// called with the entity, so "play this once, then go back to idle" needs no
+/// bookkeeping in the program.
+///
+/// An entity whose ENTITY_PROCESS bit is clear is left exactly as it is: no cel
+/// change and no end report.
 ///
 /// Only the scene is needed, not the loaded cels: which cels a handle covers is
 /// a question for the renderer.
 ///
 /// @return false if the behaviour faulted; @p behaviour then carries the error.
 ///
-bool anim_advance(const scene *scene, world_state *state, uint32_t frame,
-                  vm *behaviour);
+bool anim_advance(const scene *scene, world_state *state, vm *behaviour);
 
 #endif

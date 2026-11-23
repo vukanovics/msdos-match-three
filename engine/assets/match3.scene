@@ -25,35 +25,36 @@ sheet ui UI.SPR 2
 # first cel.
 #
 # 'sprite' is a single cel. 'animatedsprite' is a run of them: the fourth number
-# is how many, 'loop' wraps back to the first cel instead of stopping on the last
-# one and telling the behaviour, and 'resident' decodes the whole run up front
-# and keeps it. Residency is what makes a hundred gems at a hundred cels
-# affordable: every gem is on its own cel, so without it each frame would decode
-# a hundred of them, at about a third of a millisecond each.
+# is how many cels it holds and the fifth how many ticks each is held for, so
+# every run has its own speed. 'loop' wraps back to the first cel instead of
+# stopping on the last one and telling the behaviour, and 'resident' decodes the
+# whole run up front and keeps it.
+#
+# Residency is what makes a hundred gems at a hundred cels affordable: every gem
+# is on its own cel, so without it each frame would decode a hundred of them, at
+# about a third of a millisecond each.
 #
 # Each sheet holds 60 cels of glimmer followed by 60 of idle. The order here
 # matters: the behaviour relies on glimmer N being handle N and idle N being
 # handle N + 6, so it can tell them apart with a single comparison and recover a
-# gem's kind with a modulus.
-animatedsprite glimmer0 blue 0 60
-animatedsprite glimmer1 cyan 0 60
-animatedsprite glimmer2 green 0 60
-animatedsprite glimmer3 purple 0 60
-animatedsprite glimmer4 red 0 60
-animatedsprite glimmer5 yellow 0 60
-animatedsprite idle0 blue 60 60 loop resident
-animatedsprite idle1 cyan 60 60 loop resident
-animatedsprite idle2 green 60 60 loop resident
-animatedsprite idle3 purple 60 60 loop resident
-animatedsprite idle4 red 60 60 loop resident
-animatedsprite idle5 yellow 60 60 loop resident
+# gem's kind with arithmetic on the handle.
+#
+# The art is 60 frames per second and every second frame is kept, so holding a
+# cel for four ticks plays a run at half its authored speed.
+animatedsprite glimmer0 blue 0 60 4
+animatedsprite glimmer1 cyan 0 60 4
+animatedsprite glimmer2 green 0 60 4
+animatedsprite glimmer3 purple 0 60 4
+animatedsprite glimmer4 red 0 60 4
+animatedsprite glimmer5 yellow 0 60 4
+animatedsprite idle0 blue 60 60 4 loop resident
+animatedsprite idle1 cyan 60 60 4 loop resident
+animatedsprite idle2 green 60 60 4 loop resident
+animatedsprite idle3 purple 60 60 4 loop resident
+animatedsprite idle4 red 60 60 4 loop resident
+animatedsprite idle5 yellow 60 60 4 loop resident
 sprite cursor ui 0
 sprite picked ui 1
-
-# Ticks a cel is held for. The art is 60 frames per second and every second
-# frame is kept, so holding a cel for four 60 Hz ticks plays the run at half its
-# authored speed.
-animation.ticks 4
 
 entities.count 104
 

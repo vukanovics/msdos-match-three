@@ -11,7 +11,6 @@ static void set_defaults(scene *this) {
   strcpy(this->name, "untitled");
   this->background = 0;
   this->seed = 1;
-  this->animation_ticks = 1;
 }
 
 static bool parse_int(const char *value, int *result) {
@@ -248,19 +247,34 @@ static bool add_sprite(scene *this, char *value, bool animated, char *error,
   }
 
   int frames = 1;
+  int ticks = 0;
   bool loop = false;
   bool resident = false;
   if (animated) {
     if (!rest) {
-      snprintf(error, error_size, "line %d: '%s' needs a frame count", line,
+      snprintf(error, error_size, "line %d: '%s' needs a cel count", line,
                keyword);
       return false;
     }
-    char *flags = split_word(rest);
+    char *flag_text = split_word(rest);
     if (!parse_int(rest, &frames) || frames < 1) {
       snprintf(error, error_size,
-               "line %d: sprite '%s' needs a frame count of 1 or more", line,
+               "line %d: sprite '%s' needs a cel count of 1 or more", line,
                name);
+      return false;
+    }
+    if (!flag_text) {
+      snprintf(error, error_size,
+               "line %d: sprite '%s' needs a tick count after its cels", line,
+               name);
+      return false;
+    }
+    rest = flag_text;
+    char *flags = split_word(rest);
+    if (!parse_int(rest, &ticks) || ticks < 1) {
+      snprintf(error, error_size,
+               "line %d: sprite '%s' needs a tick count of 1 or more per cel",
+               line, name);
       return false;
     }
     while (flags && *flags) {
@@ -273,7 +287,7 @@ static bool add_sprite(scene *this, char *value, bool animated, char *error,
       } else {
         snprintf(error, error_size,
                  "line %d: sprite '%s' takes 'loop' or 'resident' after its "
-                 "frame count, not '%s'",
+                 "tick count, not '%s'",
                  line, name, flag);
         return false;
       }
@@ -298,6 +312,7 @@ static bool add_sprite(scene *this, char *value, bool animated, char *error,
   sprite->sheet = sheet;
   sprite->cel = cel;
   sprite->frames = frames;
+  sprite->ticks = ticks;
   sprite->loop = loop;
   sprite->resident = resident;
   return true;
@@ -334,9 +349,7 @@ static bool assign(scene *this, const char *key, char *value, char *error,
     return false;
   }
 
-  if (!strcmp(key, "animation.ticks")) {
-    this->animation_ticks = number;
-  } else if (!strcmp(key, "entities.count")) {
+  if (!strcmp(key, "entities.count")) {
     this->entity_count = number;
     *seen_entities = true;
   } else if (!strcmp(key, "color.background")) {
@@ -411,10 +424,6 @@ static bool validate(const scene *this, bool seen_entities, char *error,
     return false;
   }
   int cels = scene_cel_count(this);
-  if (this->animation_ticks < 1) {
-    snprintf(error, error_size, "animation.ticks must be 1 or more");
-    return false;
-  }
   if (cels > SCENE_MAX_CELS) {
     snprintf(error, error_size,
              "the sheets hold %d cels, more than the %d the engine keeps",

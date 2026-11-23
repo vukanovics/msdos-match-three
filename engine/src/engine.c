@@ -131,13 +131,13 @@ static void log_state(const vm *machine, const world_state *state,
   diag_line(line);
 }
 
-// Animation is world state: the engine steps every entity's cel and tells the
-// behaviour when a run that does not loop reaches its last cel. The stepping
-// itself lives in anim.c, which needs nothing but the scene, so the host check
-// runs the same code the guest does.
+// Animation is world state: the engine moves every processed entity's cel along
+// and tells the behaviour when a run that does not loop reaches its last cel.
+// The stepping itself lives in anim.c, which needs nothing but the scene, so the
+// host check runs the same code the guest does.
 static void advance_animations(const scene *scene, world_state *state,
-                               uint32_t frame, vm *behaviour) {
-  if (!anim_advance(scene, state, frame, behaviour)) {
+                               vm *behaviour) {
+  if (!anim_advance(scene, state, behaviour)) {
     report_fault(false, behaviour, "animation-end");
   }
 }
@@ -230,7 +230,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
     // Step the cels before anything reads the world, so the tick, the demo hash
     // and the frame that is drawn all describe the same instant.
     if (!behaviour_faulted) {
-      advance_animations(&description, &state, frame, &behaviour);
+      advance_animations(&description, &state, &behaviour);
     }
 
     if (the_demo.mode == DEMO_PLAY) {
