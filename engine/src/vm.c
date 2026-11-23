@@ -39,6 +39,7 @@
 #define OP_IFELSE 0x44
 #define OP_RET 0x45
 #define OP_HALT 0x46
+#define OP_JZ 0x47
 
 static uint16_t read_u16(const uint8_t *at) {
   return (uint16_t)(at[0] | ((uint16_t)at[1] << 8));
@@ -336,6 +337,20 @@ static bool run(vm *this, uint32_t entry, int32_t argument,
       }
       ip = read_u32(this->code + ip);
       break;
+
+    case OP_JZ: {
+      if (ip + 4 > this->code_size) {
+        this->error = "truncated jump";
+        break;
+      }
+      uint32_t target = read_u32(this->code + ip);
+      ip += 4;
+      a = pop_operand(this);
+      if (!this->error && a == 0) {
+        ip = target;
+      }
+      break;
+    }
 
     case OP_WHEN: {
       int32_t quotation = pop_operand(this);

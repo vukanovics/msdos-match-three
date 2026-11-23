@@ -1,7 +1,7 @@
 # Match-three behaviour.
 #
-# Total and non-recursive: definitions are inlined by the compiler and 'for' is
-# unrolled, so there is no recursion and every program terminates. State lives
+# Total and non-recursive: definitions are inlined by the compiler and 'for' is a
+# counted loop, so there is no recursion and every program terminates. State lives
 # in the scene's slot table; @name reads a slot and !name writes one, while bare
 # '@' and '!' take the slot index from the stack.
 #

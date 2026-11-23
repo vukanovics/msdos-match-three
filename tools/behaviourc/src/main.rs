@@ -50,13 +50,14 @@ const OP_WHEN: u8 = 0x43;
 const OP_IFELSE: u8 = 0x44;
 const OP_RET: u8 = 0x45;
 const OP_HALT: u8 = 0x46;
+const OP_JZ: u8 = 0x47;
 
 const MAGIC: &[u8; 4] = b"BC02";
 const ENTITY_STRIDE: i32 = 4;
 const MAX_INLINE_DEPTH: usize = 32;
 
-// 'for' is unrolled at compile time, which keeps the VM free of loops but costs
-// code size per iteration.
+// 'for' is a counted loop whose count is a literal, which is what keeps it
+// bounded. The limit is a sanity bound on the literal, not on code size.
 const MAX_UNROLL: i32 = 1024;
 
 fn fail(message: String) -> ! {
@@ -262,15 +263,37 @@ impl<'a> Compiler<'a> {
         let body = tokens[start..end].to_vec();
         *at = end + 1;
 
-        for index in 0..count {
-            self.emit(OP_PUSH);
-            self.emit_u32(index as u32);
-            let mut inner = 0;
-            while inner < body.len() {
-                let token = body[inner].clone();
-                self.compile_token(&token, &body, &mut inner, depth)?;
-            }
+        // A counted loop: seed the index, run the body, step, repeat. The count
+        // is a literal so this still terminates, but the body is emitted once
+        // rather than once per iteration - the difference between a hundred-cell
+        // pass costing forty bytes and costing four kilobytes.
+        self.emit(OP_PUSH);
+        self.emit_u32(0);
+        let loop_at = self.here() as u32;
+        self.emit(OP_DUP);
+        self.emit(OP_PUSH);
+        self.emit_u32(count as u32);
+        self.emit(OP_LT);
+        let check_at = self.here();
+        self.emit(OP_JZ);
+        self.emit_u32(0);
+        self.emit(OP_DUP);
+
+        let mut inner = 0;
+        while inner < body.len() {
+            let token = body[inner].clone();
+            self.compile_token(&token, &body, &mut inner, depth)?;
         }
+
+        self.emit(OP_PUSH);
+        self.emit_u32(1);
+        self.emit(OP_ADD);
+        self.emit(OP_JUMP);
+        self.emit_u32(loop_at);
+
+        // The loop exits with the index still on the stack; drop it here.
+        self.patch_u32(check_at + 1, self.here() as u32);
+        self.emit(OP_DROP);
         Ok(())
     }
 
