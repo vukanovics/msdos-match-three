@@ -8,6 +8,7 @@ add_executable(match3
   src/render.c
   src/diag.c
   src/vm.c
+  src/demo.c
   src/match3_sheet.c
 )
 set_target_properties(match3 PROPERTIES SUFFIX ".exe")

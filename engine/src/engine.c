@@ -14,10 +14,7 @@
 #include "engine/vm.h"
 #include "vga/vga.h"
 
-#define TARGET_FPS 60
-#define FRAME_US (1000000u / TARGET_FPS)
-#define MAX_CATCH_UP_US (4u * FRAME_US)
-
+#define LOG_PATH "ENGINE.LOG"
 // Two pages, flipped at vertical sync. The flip waits for the retrace edge that
 // latches the new start address, so by the time it returns the other page is no
 // longer displayed and is safe to draw. The panel starts out as 2 not 3
@@ -95,6 +92,10 @@ static int behaviour_faulted;
 static uint32_t logged_checksum;
 static bool have_logged_checksum;
 
+// The demo buffers are large and fixed; keeping them off the stack matters
+// under DPMI, where the stack is far smaller than the heap.
+static demo the_demo;
+
 // A fault is reported once and then ignored, so a broken program does not turn
 // every frame into a log entry. Likewise a tick that changes nothing: writing
 // the log reopens the file, which is far too expensive to do every frame.
@@ -123,12 +124,15 @@ static bool run_program(bool ok, const vm *machine, const world_state *state,
 }
 
 int engine_main(const char *scene_path, const char *behaviour_path,
-                const sheet_source *const *sheets) {
+                const sheet_source *const *sheets, demo_mode mode,
+                const char *demo_path) {
   scene description;
   sprite_sheet sprites;
   world_state state;
   vm behaviour;
   char error[160];
+  char demo_summary[128];
+  demo_summary[0] = '\0';
 
   switch_to_mode_x();
   __djgpp_nearptr_enable();
@@ -164,6 +168,13 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   }
 
   diag_open(LOG_PATH);
+
+  if (!demo_open(&the_demo, mode, demo_path, error, sizeof(error))) {
+    __djgpp_nearptr_disable();
+    switch_to_mode_3();
+    printf("engine: %s\n", error);
+    return 1;
+  }
   diag_state(&description, &state);
   if (!run_program(vm_init(&behaviour), &behaviour, &state, &description,
                    "init")) {
@@ -181,28 +192,71 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   set_display_start(render_page_size());
 
   uint32_t frame = 0;
-  uint32_t last = clock_us();
-  uint32_t accumulated = 0;
   int running = 1;
 
+  // Exactly one tick per displayed frame, with input applied at the start of
+  // the frame it belongs to. That is what makes frame N mean the same thing on
+  // every run: with a clock-derived tick rate, the number of ticks per frame
+  // would depend on how fast the host happened to be, and a recording could not
+  // be replayed. The cost is that a frame which overruns slows the world down
+  // instead of catching up.
   while (running) {
-    uint32_t frame_start = clock_us();
-    uint32_t now = frame_start;
-    uint32_t delta = now - last;
-    last = now;
-    if (delta > MAX_CATCH_UP_US) {
-      delta = MAX_CATCH_UP_US;
+    uint8_t keys[DEMO_KEYS_PER_FRAME];
+    int key_count = 0;
+
+    if (the_demo.mode == DEMO_PLAY) {
+      // Only the engine's own keys come from the keyboard during playback.
+      if (kbhit()) {
+        int key = getch();
+        if (key == 0) {
+          (void)getch();
+        } else if (key == KEY_ESCAPE) {
+          running = 0;
+        }
+      }
+      key_count = demo_keys_at(&the_demo, frame, keys, DEMO_KEYS_PER_FRAME);
+    } else {
+      while (key_count < DEMO_KEYS_PER_FRAME && kbhit()) {
+        int key = getch();
+        if (key == 0) {
+          int extended = getch();
+          if (extended == KEY_F1) {
+            // Inspection hook: dump the world and timings for the host tools.
+            diag_state(&description, &state);
+            diag_timings();
+          } else if (extended == KEY_F2) {
+            probe_display();
+          } else {
+            keys[key_count++] = (uint8_t)extended;
+          }
+        } else if (key == KEY_ESCAPE) {
+          running = 0;
+        } else {
+          keys[key_count++] = (uint8_t)key;
+        }
+      }
     }
 
-    // Fixed step: the world advances in whole 1/60 s ticks no matter how long
-    // drawing took.
-    accumulated += delta;
-    while (accumulated >= FRAME_US) {
-      accumulated -= FRAME_US;
-      if (!behaviour_faulted) {
-        run_program(vm_tick(&behaviour), &behaviour, &state, &description,
-                    "tick");
+    for (int i = 0; i < key_count; i++) {
+      if (the_demo.mode == DEMO_RECORD) {
+        demo_record_key(&the_demo, frame, keys[i]);
       }
+      if (!behaviour_faulted) {
+        run_program(vm_key(&behaviour, keys[i]), &behaviour, &state,
+                    &description, "key");
+      }
+    }
+
+    if (!behaviour_faulted) {
+      run_program(vm_tick(&behaviour), &behaviour, &state, &description,
+                  "tick");
+    }
+
+    uint32_t hash = state_checksum(&state, scene_slot_count(&description));
+    if (the_demo.mode == DEMO_RECORD) {
+      demo_record_hash(&the_demo, frame, hash);
+    } else if (the_demo.mode == DEMO_PLAY) {
+      demo_check_hash(&the_demo, frame, hash);
     }
 
     uint32_t render_start = clock_us();
@@ -232,26 +286,8 @@ int engine_main(const char *scene_path, const char *behaviour_path,
       diag_frame(frame, draw_us, frame_us, clock_us());
     }
 
-    if (kbhit()) {
-      int key = getch();
-      if (key == 0) {
-        int extended = getch();
-        if (extended == KEY_F1) {
-          // Inspection hook: dump the world and the timings for the host tools.
-          diag_state(&description, &state);
-          diag_timings();
-        } else if (extended == KEY_F2) {
-          probe_display();
-        } else if (!behaviour_faulted) {
-          run_program(vm_key(&behaviour, extended), &behaviour, &state,
-                      &description, "key");
-        }
-      } else if (key == KEY_ESCAPE) {
-        running = 0;
-      } else if (!behaviour_faulted) {
-        run_program(vm_key(&behaviour, key), &behaviour, &state, &description,
-                    "key");
-      }
+    if (the_demo.mode == DEMO_PLAY && frame >= the_demo.frames) {
+      running = 0;
     }
 
     // Pace is supplied by the flip: it returns at the retrace that latches the
@@ -260,8 +296,15 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   }
 
   diag_state(&description, &state);
+  demo_close(&the_demo, demo_summary, sizeof(demo_summary));
+  if (demo_summary[0]) {
+    diag_line(demo_summary);
+  }
   diag_close();
   __djgpp_nearptr_disable();
   switch_to_mode_3();
+  if (demo_summary[0]) {
+    printf("engine: %s\n", demo_summary);
+  }
   return 0;
 }
