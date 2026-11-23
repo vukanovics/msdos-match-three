@@ -18,6 +18,44 @@
 
 #define KEY_ESCAPE 0x1b
 #define KEY_F1 0x3b
+#define KEY_F2 0x3c
+
+static void probe_display(void) {
+  // Records the edges of the retrace and display-enable bits so the vertical
+  // timing can be read out of the log instead of guessed at.
+  char line[192];
+  uint32_t started = clock_us();
+  uint32_t previous = clock_us();
+  int retrace = get_input_status_1().vertical_retrace ? 1 : 0;
+  int enabled = get_input_status_1().display_enable ? 1 : 0;
+  int edges = 0;
+
+  snprintf(line, sizeof(line), "probe t %lu retrace %d enable %d",
+           (unsigned long)(previous - started), retrace, enabled);
+  diag_line(line);
+
+  while (edges < 12) {
+    input_status_1_register status = get_input_status_1();
+    int now_retrace = status.vertical_retrace ? 1 : 0;
+    int now_enabled = status.display_enable ? 1 : 0;
+    uint32_t now = clock_us();
+
+    if (now_retrace != retrace || now_enabled != enabled) {
+      snprintf(line, sizeof(line),
+               "probe t %lu retrace %d enable %d (was %d %d)",
+               (unsigned long)(now - started), now_retrace, now_enabled,
+               retrace, enabled);
+      diag_line(line);
+      retrace = now_retrace;
+      enabled = now_enabled;
+      edges++;
+    }
+    if ((int32_t)(now - started) > 300000) { // give up after 300 ms
+      diag_line("probe timed out");
+      break;
+    }
+  }
+}
 
 int main(void) {
   scene scene_description;
@@ -47,7 +85,8 @@ int main(void) {
   int running = 1;
 
   while (running) {
-    uint32_t now = clock_us();
+    uint32_t frame_start = clock_us();
+    uint32_t now = frame_start;
     uint32_t delta = now - last;
     last = now;
     if (delta > MAX_CATCH_UP_US) {
@@ -96,6 +135,8 @@ int main(void) {
           // Inspection hook: dump the world and the timings for the host tools.
           diag_state(&scene_description, &state);
           diag_timings();
+        } else if (extended == KEY_F2) {
+          probe_display();
         }
         // Other extended keys belong to the language (M1).
       } else if (key == KEY_ESCAPE) {
@@ -103,9 +144,13 @@ int main(void) {
       }
     }
 
-    // No explicit pacing: the vsync latched page flip already paces the loop at
-    // the refresh rate, and busy waiting would only invite the emulator to
-    // throttle the emulated CPU.
+    // Pace the loop. On real hardware the retrace wait inside the flip already
+    // holds us to the refresh rate and this never spins; it matters where the
+    // display does not gate us, such as an emulator that never raises the sync
+    // bits, where the loop would otherwise free run well above the refresh.
+    uint32_t frame_end = frame_start + FRAME_US;
+    while ((int32_t)(clock_us() - frame_end) < 0) {
+    }
   }
 
   diag_state(&scene_description, &state);

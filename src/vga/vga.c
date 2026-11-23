@@ -113,18 +113,25 @@ size_t screen_pos_to_memory_pos(uint16_t x, uint16_t y) {
 void set_display_start(size_t base) {
   uint16_t address = (uint16_t)(base / PAGE_ADDRESS_UNIT);
 
-  // The CRTC latches the start address at the start of vertical retrace, and
-  // the registers should be loaded during active display. Wait for active
-  // display, load the address, then wait for the retrace that latches it so
-  // the caller can safely draw into the other (now hidden) page.
-  while (get_input_status_1().vertical_retrace) {
+  // The CRTC latches the start address at the beginning of vertical retrace, so
+  // program it as that retrace begins and the flip takes effect for the frame
+  // that is about to start; the caller can then draw into the page that just
+  // stopped being displayed.
+  //
+  // Bit 3 is vertical sync on real hardware, but DOSBox derives the status
+  // register from its own frame clock and never raises that bit for this mode,
+  // while bit 0 (blanking) is raised by both. Accepting either ends the wait at
+  // the same instant on hardware and makes the poll work in the emulator. The
+  // loop is bounded so a display that reports nothing cannot hang the engine.
+  for (uint32_t spins = 0; spins < 50000; spins++) {
+    input_status_1_register status = get_input_status_1();
+    if (status.vertical_retrace || status.display_enable) {
+      break;
+    }
   }
 
   set_crtc(&CRTC_START_ADDRESS_HIGH, (uint8_t)(address >> 8));
   set_crtc(&CRTC_START_ADDRESS_LOW, (uint8_t)(address & 0xff));
-
-  while (!get_input_status_1().vertical_retrace) {
-  }
 }
 
 copy_to_framebuffer_result copy_to_framebuffer(planarized_image *source,
