@@ -1,0 +1,57 @@
+:root {
+  color-scheme: dark;
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  background: #101116;
+  color: #f6eedf;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.06em;
+  color: #ffd77c;
+}
+
+footer {
+  color: #c3becc;
+}
+
+header {
+  margin-bottom: 1.5rem;
+}
+
+#game {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  position: relative;
+  background: #07080c;
+  outline: 1px solid #41404c;
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid #5b5869;
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+}
