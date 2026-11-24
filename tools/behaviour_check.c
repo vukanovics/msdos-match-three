@@ -160,7 +160,14 @@ int main(int argc, char **argv) {
     glimmer_started[cell] = -1;
   }
 
+  int cascades_seen = 0;
   for (long tick = 0; tick < TICKS; tick++) {
+    int marked = 0;
+    if (state.slot[phase_slot] == 2) {
+      for (int cell = 0; cell < BOARD_CELLS; cell++) {
+        marked += !!(state.slot[ENTITY_SLOT(cell, ENTITY_FLAGS)] & FLAG_GAME);
+      }
+    }
     // Same order as the engine: step the animations, then input, then the tick.
     if (!anim_advance(&description, &state, &machine)) {
       printf("tick %ld: animation-end: %s\n", tick,
@@ -175,6 +182,20 @@ int main(int argc, char **argv) {
     if (!vm_tick(&machine)) {
       printf("tick %ld: %s\n", tick, machine.error ? machine.error : "unknown");
       return 1;
+    }
+
+    if (marked && state.slot[phase_slot] == 3) {
+      int respawned = 0;
+      for (int cell = 0; cell < BOARD_CELLS; cell++) {
+        int y = state.slot[ENTITY_SLOT(cell, ENTITY_Y)];
+        respawned += y < 0;
+      }
+      if (respawned != marked) {
+        printf("tick %ld: %d marked gems but %d respawned\n",
+               tick, marked, respawned);
+        return 1;
+      }
+      cascades_seen++;
     }
 
     if (frozen_at < 0 && tick == 3000 && state.slot[phase_slot] == 0 &&
@@ -310,6 +331,11 @@ int main(int argc, char **argv) {
         }
       }
     }
+  }
+
+  if (!cascades_seen) {
+    puts("expected at least one cascade");
+    return 1;
   }
 
   int hidden = 0;

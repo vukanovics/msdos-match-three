@@ -377,7 +377,7 @@ end
 # Hide every marked cell.
 def clear-pass
   for 100 [
-    dup stride * slot-flags + @ flag-marked and
+    dup stride * slot-flags + @ flag-marked / 2 mod
     [
       -1 over stride * !
       gem-flags over stride * slot-flags + !
@@ -407,7 +407,7 @@ def collapse-pass
   for 10 [
     dup 90 + !collapse-destination
     for 10 [
-      90 swap 10 * - over +
+      90 swap 10 * - @collapse-destination 10 mod +
       dup stride * @ 0 >= [
         dup @collapse-destination = not [ compact-move ] when
         @collapse-destination 10 - !collapse-destination
