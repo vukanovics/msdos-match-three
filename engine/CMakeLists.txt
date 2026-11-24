@@ -6,6 +6,7 @@ add_library(engine STATIC
   src/state.c
   src/sprite.c
   src/render.c
+  src/particles.c
   src/diag.c
   src/vm.c
   src/demo.c

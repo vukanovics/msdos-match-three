@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "engine/slots.h"
+#include "engine/particle_config.h"
 
 #define SCENE_NAME_MAX 32
 #define SCENE_MAX_ENTITIES 256
@@ -85,6 +86,7 @@ typedef struct {
   int entity_count;
   uint8_t background;
   uint32_t seed;
+  particle_config particles;
   int global_count;
   scene_global global[SCENE_MAX_GLOBALS];
   int sheet_count;

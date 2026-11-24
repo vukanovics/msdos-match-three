@@ -62,6 +62,20 @@ color.background 253
 
 world.seed 4231
 
+# Burst ranges are inclusive. Origins are percentages of the sprite extent.
+# Velocities are in sixteenths of a pixel per tick, with negative Y upwards.
+# Size is in pixels, lifetime in simulation ticks, and colour in palette indices.
+particles.count 24 32
+particles.x 0 100
+particles.y 0 100
+particles.vx -36 36
+particles.vy -24 32
+# Downward acceleration in 1/256 pixel per tick squared.
+particles.gravity 56
+particles.colour 0 255
+particles.size 2 5
+particles.lifetime 15 27
+
 # Named globals. These follow the entity pool, in this order, and are what the
 # behaviour program names with '@name' and '!name'.
 slot cursor-row 5

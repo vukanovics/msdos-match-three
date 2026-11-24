@@ -35,6 +35,7 @@
 #define OP_GET_INDEXED 0x32
 #define OP_SET_INDEXED 0x33
 #define OP_RANDOM 0x34
+#define OP_EMIT_PARTICLES 0x35
 #define OP_QUOTE 0x40
 #define OP_JUMP 0x41
 #define OP_WHEN 0x43
@@ -333,6 +334,14 @@ static bool run(vm *this, uint32_t entry, int32_t argument,
       a = pop_operand(this);
       if (!this->error && slot_index(this, slot)) {
         this->slots[slot] = a;
+      }
+      break;
+    }
+
+    case OP_EMIT_PARTICLES: {
+      int entity = pop_operand(this);
+      if (!this->error && this->emit_particles) {
+        this->emit_particles(this->particle_context, entity);
       }
       break;
     }

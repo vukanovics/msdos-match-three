@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "engine/particles.h"
 #include "engine/scene.h"
 #include "engine/sprite.h"
 #include "engine/state.h"
@@ -34,7 +35,7 @@ bool render_init(const scene *scene, const sprite_set *sprites, char *error,
 ///
 void render_frame(const scene *scene, sprite_set *sprites,
                   const world_state *state,
-                  size_t page_base);
+                  const particle_system *particles, size_t page_base);
 
 ///
 /// @brief Offset, in per-plane bytes, of the second display page.

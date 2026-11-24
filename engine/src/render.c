@@ -216,8 +216,47 @@ static int build_draw_order(const scene *scene, const world_state *state) {
   return scene->entity_count;
 }
 
+// Batch the overlay by plane so even a full pool needs only four VGA mask writes.
+static void draw_particles(uint8_t *vram, const particle_system *particles) {
+  if (!particles->count) {
+    return;
+  }
+  for (int plane = 0; plane < 4; plane++) {
+    set_sc(&SC_MAP_MASK, (uint8_t)(1 << plane));
+    for (unsigned i = 0; i < particles->count; i++) {
+      const particle *item = &particles->items[i];
+      int x = item->x >> PARTICLE_SUBPIXEL_SHIFT;
+      int y = item->y >> PARTICLE_SUBPIXEL_SHIFT;
+      int right = x + item->size;
+      int bottom = y + item->size;
+      if (right <= 0 || x >= SCREEN_WIDTH || bottom <= 0 || y >= SCREEN_HEIGHT) {
+        continue;
+      }
+      if (x < 0) {
+        x = 0;
+      }
+      if (right > SCREEN_WIDTH) {
+        right = SCREEN_WIDTH;
+      }
+      if (y < 0) {
+        y = 0;
+      }
+      if (bottom > SCREEN_HEIGHT) {
+        bottom = SCREEN_HEIGHT;
+      }
+      // A particle wider than four pixels can touch this plane twice.
+      for (int column = x + ((plane - x) & 3); column < right; column += 4) {
+        for (int row = y; row < bottom; row++) {
+          vram[row * ROW_BYTES + (column >> 2)] = item->colour;
+        }
+      }
+    }
+  }
+}
+
 void render_frame(const scene *scene, sprite_set *source,
-                  const world_state *state, size_t page_base) {
+                  const world_state *state, const particle_system *particles,
+                  size_t page_base) {
   uint8_t *vram = video_memory();
   uint32_t start = clock_us();
 
@@ -256,6 +295,7 @@ void render_frame(const scene *scene, sprite_set *source,
     }
     blit(decoded, x, y, page_base);
   }
+  draw_particles(vram + page_base, particles);
   uint32_t after_sprites = clock_us();
 
   last_stats.clear_us = after_clear - start;

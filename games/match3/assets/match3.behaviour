@@ -374,11 +374,12 @@ def match-pass
   ]
 end
 
-# Hide every marked cell.
+# Burst from the current sprite cel before removing each marked gem.
 def clear-pass
   for 100 [
     dup stride * slot-flags + @ flag-marked / 2 mod
     [
+      dup emit-particles
       -1 over stride * !
       gem-flags over stride * slot-flags + !
     ] when

@@ -94,6 +94,7 @@ static bool have_logged_checksum;
 // The demo buffers are large and fixed; keeping them off the stack matters
 // under DPMI, where the stack is far smaller than the heap.
 static demo the_demo;
+static particle_system particles;
 
 // A fault is reported once and then ignored, so a broken program does not turn
 // every frame into a log entry.
@@ -190,6 +191,10 @@ int engine_main(const char *scene_path, const char *behaviour_path,
     return 1;
   }
 
+  particles_init(&particles, &description, sprites, &state);
+  behaviour.emit_particles = particles_emit;
+  behaviour.particle_context = &particles;
+
   diag_open(LOG_PATH);
 
   if (!demo_open(&the_demo, mode, demo_path, error, sizeof(error))) {
@@ -210,7 +215,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   // that is not being displayed (the mode set leaves the display on page 0), so
   // even the first frame is presented complete.
   size_t page_index = 0;
-  render_frame(&description, sprites, &state, render_page_size());
+  render_frame(&description, sprites, &state, &particles, render_page_size());
   set_display_start(render_page_size());
 
   uint32_t frame = 0;
@@ -226,6 +231,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
     uint32_t frame_start = clock_us();
     uint8_t keys[DEMO_KEYS_PER_FRAME];
     int key_count = 0;
+    particles_advance(&particles);
 
     // Step the cels before anything reads the world, so the tick, the demo hash
     // and the frame that is drawn all describe the same instant.
@@ -296,7 +302,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
 
     uint32_t render_start = clock_us();
     size_t page = page_index * render_page_size();
-    render_frame(&description, sprites, &state, page);
+    render_frame(&description, sprites, &state, &particles, page);
     uint32_t draw_us = clock_us() - render_start;
 
     set_display_start(page);

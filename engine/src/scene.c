@@ -11,6 +11,14 @@ static void set_defaults(scene *this) {
   strcpy(this->name, "untitled");
   this->background = 0;
   this->seed = 1;
+  this->particles = (particle_config){
+      .x_percent = {0, 100},
+      .y_percent = {0, 100},
+      .colour = {0, 255},
+      .size = {1, 1},
+      .lifetime = {20, 20},
+      .gravity = 32,
+  };
 }
 
 static bool parse_int(const char *value, int *result) {
@@ -318,8 +326,60 @@ static bool add_sprite(scene *this, char *value, bool animated, char *error,
   return true;
 }
 
+static bool assign_particle_range(particle_config *config, const char *key,
+                                  char *value, char *error, size_t error_size) {
+  const struct {
+    const char *name;
+    particle_range *range;
+    int low;
+    int high;
+  } options[] = {
+      {"count", &config->count, 0, 32},
+      {"x", &config->x_percent, 0, 100},
+      {"y", &config->y_percent, 0, 100},
+      {"vx", &config->velocity_x, -128, 128},
+      {"vy", &config->velocity_y, -128, 128},
+      {"colour", &config->colour, 0, 255},
+      {"size", &config->size, 1, 8},
+      {"lifetime", &config->lifetime, 1, 120},
+  };
+  for (size_t i = 0; i < sizeof(options) / sizeof(options[0]); i++) {
+    if (strcmp(key, options[i].name)) {
+      continue;
+    }
+    char *minimum = strtok(value, " \t");
+    char *maximum = strtok(NULL, " \t");
+    particle_range range;
+    if (!minimum || !maximum || strtok(NULL, " \t") ||
+        !parse_int(minimum, &range.min) || !parse_int(maximum, &range.max) ||
+        range.min < options[i].low || range.max > options[i].high ||
+        range.min > range.max) {
+      snprintf(error, error_size, "particles.%s needs min max in %d..%d", key,
+               options[i].low, options[i].high);
+      return false;
+    }
+    *options[i].range = range;
+    return true;
+  }
+  snprintf(error, error_size, "unknown particle setting '%s'", key);
+  return false;
+}
+
 static bool assign(scene *this, const char *key, char *value, char *error,
                    size_t error_size, int line, bool *seen_entities) {
+  if (!strcmp(key, "particles.gravity")) {
+    int gravity;
+    if (!parse_int(value, &gravity) || gravity < 0 || gravity > 128) {
+      snprintf(error, error_size, "particles.gravity must be 0..128");
+      return false;
+    }
+    this->particles.gravity = gravity;
+    return true;
+  }
+  if (!strncmp(key, "particles.", 10)) {
+    return assign_particle_range(&this->particles, key + 10, value, error,
+                                 error_size);
+  }
   if (!strcmp(key, "slot")) {
     return add_global(this, value, error, error_size, line);
   }

@@ -42,6 +42,10 @@ typedef struct {
   uint32_t returns[VM_CALL_DEPTH];
   int return_depth;
 
+  // Optional presentation callback. Headless simulations can omit it.
+  void (*emit_particles)(void *context, int entity);
+  void *particle_context;
+
   const char *error;
 } vm;
 

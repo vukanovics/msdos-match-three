@@ -46,6 +46,7 @@ const OP_SET: u8 = 0x31;
 const OP_GET_INDEXED: u8 = 0x32;
 const OP_SET_INDEXED: u8 = 0x33;
 const OP_RANDOM: u8 = 0x34;
+const OP_EMIT_PARTICLES: u8 = 0x35;
 const OP_QUOTE: u8 = 0x40;
 const OP_JUMP: u8 = 0x41;
 const OP_WHEN: u8 = 0x43;
@@ -629,6 +630,7 @@ fn primitive(word: &str) -> Option<u8> {
         "or" => OP_OR,
         "not" => OP_NOT,
         "random" => OP_RANDOM,
+        "emit-particles" => OP_EMIT_PARTICLES,
         "when" => OP_WHEN,
         "ifelse" => OP_IFELSE,
         _ => return None,
