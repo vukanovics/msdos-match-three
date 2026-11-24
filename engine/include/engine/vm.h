@@ -48,11 +48,10 @@ typedef struct {
 ///
 /// @brief Validates a compiled program against the loaded scene.
 ///
-/// The slot count comes from the same scene the compiler read, so a stale
-/// program stops the engine at load instead of corrupting state.
+/// The slot count and layout fingerprint come from the scene the compiler read.
 ///
 bool vm_load(vm *this, const uint8_t *bytes, size_t size, int32_t *slots,
-             uint16_t slot_count, uint32_t seed);
+             uint16_t slot_count, uint32_t fingerprint, uint32_t seed);
 
 ///
 /// @brief Runs the init entry point. Call once, before the first frame.

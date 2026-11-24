@@ -11,7 +11,7 @@
 #   slot 0   the animation handle
 #   slot 1   x, Q16.16
 #   slot 2   y, Q16.16
-#   slot 3   flags: bit 0 visible, bit 1 marked for clearing
+#   slot 3   flags: visible, process animation, and marked for clearing
 #   slot 4   which cel of the animation is showing
 #
 # The engine steps the cel of every processed entity once that animation's tick
@@ -60,48 +60,46 @@ def above-board
   15728640
 end
 
-# Slots per entity, and the offset of each field within them. The stride is
-# ENTITY_STRIDE in the engine, and the behaviour has to agree with it because it
-# addresses the pool arithmetically.
+# Entity constants come from the engine layout at compile time.
 def stride
-  7
+  %ENTITY_STRIDE
 end
 
 def slot-x
-  1
+  %ENTITY_X
 end
 
 def slot-y
-  2
+  %ENTITY_Y
 end
 
 def slot-flags
-  3
+  %ENTITY_FLAGS
 end
 
 def slot-frame
-  4
+  %ENTITY_FRAME
 end
 
 def slot-layer
-  5
+  %ENTITY_LAYER
 end
 
 def slot-phase
-  6
+  %ENTITY_PHASE
 end
 
 # Flag bits. The engine reads the first two; the rest are the game's.
 def flag-visible
-  1
+  %ENTITY_VISIBLE
 end
 
 def flag-process
-  2
+  %ENTITY_PROCESS
 end
 
 def flag-marked
-  4
+  %FLAG_GAME
 end
 
 # What a gem on the board carries, and what a marked one carries.
@@ -124,11 +122,11 @@ end
 
 # Slot base of the two box entities (100 and 101), which the behaviour owns.
 def cursor-base
-  700
+  100 stride *
 end
 
 def picked-base
-  707
+  101 stride *
 end
 
 # Ticks each cel is held for. The scene gives every animated sprite its own rate;
@@ -173,7 +171,7 @@ end
 # 6 + kind: the idle sprites are handles 6..11 and glimmer0..5 are 0..5, so a gem
 # of kind k is idle at handle 6 + k and glimmers at handle k.
 def idle-base
-  6
+  $idle0
 end
 
 # Slot indices of the arrays the behaviour keeps, for indexing at run time.
@@ -366,7 +364,7 @@ def mark3
   [ mark-run ] when
 end
 
-# A cell that is part of a run has flags 3: visible, and marked.
+# Mark every cell that belongs to a run.
 def match-pass
   0 !matches
   for 100 [
@@ -388,31 +386,31 @@ def clear-pass
   ]
 end
 
-# Move the tile above an empty cell down into it, remembering where it came from
-# so the fall animates from there. What the gem looks like travels with it, for
-# the same reason it does in a swap.
-def pull-down
-  dup 10 - !temp-a                        # temp-a is the cell above
-  vel-base over + !temp-d                 # temp-d is velocity[i]
-  @temp-a stride * @ over stride * !                        # animation
-  @temp-a stride * slot-frame + @ over stride * slot-frame + !  # cel
-  @temp-a kind-of over kind-base + !                        # kind
-  @temp-a stride * slot-y + @ over stride * slot-y + !      # y
-  vel-base @temp-a + @ !temp-c            # temp-c is velocity[i - 10]
-  @temp-c @temp-d !
-  0 vel-base @temp-a + !
-  -1 @temp-a stride * !                   # the tile left its old cell
+# Move source i into the current destination, keeping its position so it falls.
+def compact-move
+  dup stride * !temp-a
+  @collapse-destination stride * !temp-b
+  @temp-a @ @temp-b !
+  @temp-a slot-frame + @ @temp-b slot-frame + !
+  @temp-a slot-phase + @ @temp-b slot-phase + !
+  @temp-a slot-y + @ @temp-b slot-y + !
+  dup kind-of @collapse-destination kind-base + !
+  vel-base over + @ vel-base @collapse-destination + !
+  0 vel-base over + !
+  -1 @temp-a !
 end
 
-# Ten passes is enough to settle a ten row column completely.
+# Visit each column from bottom to top. Each occupied cell consumes one
+# destination, so surviving gems keep their order and refill still runs in
+# board order.
 def collapse-pass
   for 10 [
-    for 100 [
-      dup 10 >= [
-        dup stride * @ 0 <
-        over 10 - stride * @ 0 >=
-        and
-        [ pull-down ] when
+    dup 90 + !collapse-destination
+    for 10 [
+      90 swap 10 * - over +
+      dup stride * @ 0 >= [
+        dup @collapse-destination = not [ compact-move ] when
+        @collapse-destination 10 - !collapse-destination
       ] when
       drop
     ]

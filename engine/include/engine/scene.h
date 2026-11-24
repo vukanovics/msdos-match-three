@@ -136,4 +136,7 @@ int scene_slot_of(const scene *this, const char *name);
 ///
 void scene_describe(const scene *this, char *buffer, size_t buffer_size);
 
+// Identifies the entity count and ordered global and sprite names.
+uint32_t scene_layout_fingerprint(const scene *this);
+
 #endif

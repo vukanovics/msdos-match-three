@@ -54,10 +54,31 @@ const OP_RET: u8 = 0x45;
 const OP_HALT: u8 = 0x46;
 const OP_JZ: u8 = 0x47;
 
-const MAGIC: &[u8; 4] = b"BC03";
-// Must match ENTITY_STRIDE in engine/include/engine/slots.h: the compiler bakes
-// the entity pool's size into every slot index it emits.
-const ENTITY_STRIDE: i32 = 7;
+const MAGIC: &[u8; 4] = b"BC04";
+const ENTITY_LAYOUT: &str = include_str!("../../../engine/include/engine/slots.h");
+
+fn entity_constant(name: &str) -> Option<i32> {
+    ENTITY_LAYOUT.lines().find_map(|line| {
+        let mut words = line.split_whitespace();
+        if words.next()? == "#define" && words.next()? == name {
+            words.next()?.parse().ok()
+        } else {
+            None
+        }
+    })
+}
+
+fn layout_fingerprint(entity_count: i32, names: &[String], sprites: &[(String, u32)]) -> u32 {
+    let mut hash = 2166136261u32;
+    for byte in (entity_count as u32).to_le_bytes().into_iter().chain(
+        names.iter().chain(sprites.iter().map(|(name, _)| name))
+            .flat_map(|name| name.bytes().chain(std::iter::once(0))),
+    ) {
+        hash = (hash ^ u32::from(byte)).wrapping_mul(16777619);
+    }
+    hash
+}
+
 const MAX_INLINE_DEPTH: usize = 32;
 
 // 'for' is a counted loop whose count is a literal, which is what keeps it
@@ -70,6 +91,7 @@ fn fail(message: String) -> ! {
 }
 
 struct Layout {
+    fingerprint: u32,
     entity_count: i32,
     names: Vec<String>,
     index: HashMap<String, u16>,
@@ -80,7 +102,7 @@ struct Layout {
 
 impl Layout {
     fn slot_count(&self) -> i32 {
-        self.entity_count * ENTITY_STRIDE + self.names.len() as i32
+        self.entity_count * entity_constant("ENTITY_STRIDE").expect("entity stride") + self.names.len() as i32
     }
 }
 
@@ -255,7 +277,7 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
     }
 
     let entity_count = entity_count.ok_or("the scene has no 'entities.count'")?;
-    let base = entity_count * ENTITY_STRIDE;
+    let base = entity_count * entity_constant("ENTITY_STRIDE").expect("entity stride");
 
     let mut index = HashMap::new();
     for (position, name) in names.iter().enumerate() {
@@ -267,6 +289,7 @@ fn parse_scene(text: &str) -> Result<Layout, String> {
     }
 
     let layout = Layout {
+        fingerprint: layout_fingerprint(entity_count, &names, &sprites),
         entity_count,
         names,
         index,
@@ -446,6 +469,13 @@ impl<'a> Compiler<'a> {
         *at += 1;
 
         if let Ok(value) = token.parse::<i32>() {
+            self.emit(OP_PUSH);
+            self.emit_u32(value as u32);
+            return Ok(());
+        }
+        if let Some(name) = token.strip_prefix('%') {
+            let value = entity_constant(name)
+                .ok_or_else(|| format!("unknown entity constant '%{name}'"))?;
             self.emit(OP_PUSH);
             self.emit_u32(value as u32);
             return Ok(());
@@ -679,6 +709,7 @@ fn main() {
     output.extend_from_slice(&key.to_le_bytes());
     output.extend_from_slice(&animation_end.to_le_bytes());
     output.extend_from_slice(&code_size.to_le_bytes());
+    output.extend_from_slice(&layout.fingerprint.to_le_bytes());
     output.extend_from_slice(&compiler.code);
 
     fs::write(&arguments[3], &output)

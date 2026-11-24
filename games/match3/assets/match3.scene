@@ -74,6 +74,7 @@ slot temp-a 0
 slot temp-b 0
 slot temp-c 0
 slot temp-d 0
+slot collapse-destination 0
 
 # The state machine: 0 idle, 1 swapping, 2 clearing, 3 falling.
 slot phase 0

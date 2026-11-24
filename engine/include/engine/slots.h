@@ -34,9 +34,9 @@
 
 // Flags. The engine reads these two bits; everything from FLAG_GAME up is the
 // behaviour's to use as it likes.
-#define ENTITY_VISIBLE 0x01 // drawn at all
-#define ENTITY_PROCESS 0x02 // the engine steps this entity's animation
-#define FLAG_GAME 0x04
+#define ENTITY_VISIBLE 1 // drawn at all
+#define ENTITY_PROCESS 2 // the engine steps this entity's animation
+#define FLAG_GAME 4
 
 // Positions are Q16.16: pixel = value / 65536.
 #define ENTITY_FIXED_SHIFT 16

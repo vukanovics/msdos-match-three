@@ -40,13 +40,10 @@ bool render_init(const scene *scene, const sprite_set *source, char *error,
   return true;
 }
 
-// Clearing touches every byte of one plane before moving to the next, so the
-// sequencer mask is programmed four times instead of once per scanline.
+// Write the same background index to all four planes in one pass.
 static void clear_page(uint8_t *vram, size_t base, uint8_t colour) {
-  for (int plane = 0; plane < 4; plane++) {
-    set_sc(&SC_MAP_MASK, (uint8_t)(1 << plane));
-    memset(vram + base, colour, PAGE_SIZE);
-  }
+  set_sc(&SC_MAP_MASK, 0x0f);
+  memset(vram + base, colour, PAGE_SIZE);
 }
 
 // Mode X writes are gated by the sequencer map mask, and changing that mask is
@@ -151,7 +148,7 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
 
     set_sc(&SC_MAP_MASK, (uint8_t)(1 << plane));
 
-    for (int row = first_row; row < band_first; row++) {
+    for (int row = first_row; row < band_first && row <= last_row; row++) {
       blit_narrow_row(vram, page_base, y, source, stride, column, left, right,
                       row);
     }
@@ -171,7 +168,8 @@ static void blit(const sprite_cel *cel, int x, int y, size_t page_base) {
       }
     }
 
-    for (int row = band_last + 1; row <= last_row; row++) {
+    int tail = band_last < first_row ? first_row : band_last + 1;
+    for (int row = tail; row <= last_row; row++) {
       blit_narrow_row(vram, page_base, y, source, stride, column, left, right,
                       row);
     }

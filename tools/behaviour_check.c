@@ -120,7 +120,8 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (!vm_load(&machine, bytes, size, state.slot,
-               (uint16_t)scene_slot_count(&description), description.seed)) {
+               (uint16_t)scene_slot_count(&description),
+               scene_layout_fingerprint(&description), description.seed)) {
     printf("load: %s\n", machine.error ? machine.error : "unknown");
     return 1;
   }

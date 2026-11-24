@@ -23,8 +23,6 @@
 // per plane of the sprite space.
 #define PAGE_COUNT 2
 
-#define LOG_PATH "ENGINE.LOG"
-
 // Keys the engine reserves for itself. Everything else is passed to the
 // behaviour program as a BIOS key code.
 #define KEY_ESCAPE 0x1b
@@ -179,7 +177,8 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   bool behaviour_ok =
       behaviour_bytes &&
       vm_load(&behaviour, behaviour_bytes, behaviour_size, state.slot,
-              (uint16_t)scene_slot_count(&description), description.seed);
+              (uint16_t)scene_slot_count(&description),
+              scene_layout_fingerprint(&description), description.seed);
   if (!behaviour_ok) {
     const char *reason = behaviour_bytes ? behaviour.error : "cannot read it";
     snprintf(error, sizeof(error), "behaviour %s: %s", behaviour_path,
@@ -223,7 +222,8 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   // would depend on how fast the host happened to be, and a recording could not
   // be replayed. The cost is that a frame which overruns slows the world down
   // instead of catching up.
-  while (running) {
+  while (running && (mode != DEMO_PLAY || frame < the_demo.frames)) {
+    uint32_t frame_start = clock_us();
     uint8_t keys[DEMO_KEYS_PER_FRAME];
     int key_count = 0;
 
@@ -301,8 +301,9 @@ int engine_main(const char *scene_path, const char *behaviour_path,
 
     set_display_start(page);
     page_index = (page_index + 1) % PAGE_COUNT;
-    uint32_t frame_us = clock_us() - render_start;
-    diag_frame(frame, draw_us, frame_us, clock_us());
+    uint32_t presented = clock_us();
+    uint32_t frame_us = presented - frame_start;
+    diag_frame(frame, draw_us, frame_us, presented);
 
     frame++;
     // Writing the log reopens the file, which is a millisecond or more and lands
@@ -315,17 +316,14 @@ int engine_main(const char *scene_path, const char *behaviour_path,
       char line[192];
       snprintf(line, sizeof(line),
                "frame %lu draw_us %lu clear_us %lu sprites_us %lu decodes %lu "
-               "flip_us %lu tick_us %lu pit %u clock_us %lu",
+               "flip_us %lu tick_us %lu frame_us %lu pit %u clock_us %lu",
                (unsigned long)frame, (unsigned long)draw_us,
                (unsigned long)stats.clear_us, (unsigned long)stats.sprites_us,
                (unsigned long)stats.decodes,
-               (unsigned long)(frame_us - draw_us), (unsigned long)tick_us,
+               (unsigned long)(presented - render_start - draw_us),
+               (unsigned long)tick_us, (unsigned long)frame_us,
                (unsigned)clock_raw_counter(), (unsigned long)clock_us());
       diag_line(line);
-    }
-
-    if (the_demo.mode == DEMO_PLAY && frame >= the_demo.frames) {
-      running = 0;
     }
 
     // Pace is supplied by the flip: it returns at the retrace that latches the
@@ -334,7 +332,13 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   }
 
   diag_state(&description, &state);
-  demo_close(&the_demo, demo_summary, sizeof(demo_summary));
+  if (mode == DEMO_PLAY && frame != the_demo.frames) {
+    snprintf(demo_summary, sizeof(demo_summary),
+             "demo %s: stopped after %lu of %lu frames", demo_path,
+             (unsigned long)frame, (unsigned long)the_demo.frames);
+  } else {
+    demo_close(&the_demo, demo_summary, sizeof(demo_summary));
+  }
   if (demo_summary[0]) {
     diag_line(demo_summary);
   }
@@ -344,5 +348,7 @@ int engine_main(const char *scene_path, const char *behaviour_path,
   if (demo_summary[0]) {
     printf("engine: %s\n", demo_summary);
   }
-  return 0;
+  return behaviour_faulted ||
+         (mode == DEMO_PLAY &&
+          (frame != the_demo.frames || the_demo.mismatch_frame != UINT32_MAX));
 }

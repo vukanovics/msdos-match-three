@@ -516,3 +516,19 @@ void scene_describe(const scene *this, char *buffer, size_t buffer_size) {
            this->sheet_count, this->sprite_count, scene_cel_count(this),
            (int)this->background, (unsigned long)this->seed);
 }
+
+uint32_t scene_layout_fingerprint(const scene *this) {
+  uint32_t hash = 2166136261u;
+  for (int shift = 0; shift < 32; shift += 8) {
+    hash = (hash ^ (uint8_t)((uint32_t)this->entity_count >> shift)) * 16777619u;
+  }
+  for (int i = 0; i < this->global_count + this->sprite_count; i++) {
+    const char *name = i < this->global_count
+                           ? this->global[i].name
+                           : this->sprite[i - this->global_count].name;
+    do {
+      hash = (hash ^ (uint8_t)*name) * 16777619u;
+    } while (*name++);
+  }
+  return hash;
+}

@@ -2,10 +2,10 @@
 
 #include <string.h>
 
-// Bytecode format: magic "BC03", u16 slot count, u16 reserved, u32 init offset,
+// Bytecode format: magic "BC04", u16 slot count, u16 reserved, u32 init offset,
 // u32 tick offset, u32 key offset, u32 animation-end offset, u32 code size, then
 // the code. All values little endian.
-#define HEADER_SIZE 28
+#define HEADER_SIZE 32
 #define OP_PUSH 0x01
 #define OP_DUP 0x02
 #define OP_DROP 0x03
@@ -79,10 +79,10 @@ static bool slot_index(vm *this, int32_t slot) {
 uint32_t vm_random_state(const vm *this) { return this->random_state; }
 
 bool vm_load(vm *this, const uint8_t *bytes, size_t size, int32_t *slots,
-             uint16_t slot_count, uint32_t seed) {
+             uint16_t slot_count, uint32_t fingerprint, uint32_t seed) {
   memset(this, 0, sizeof(*this));
 
-  if (size < HEADER_SIZE || memcmp(bytes, "BC03", 4) != 0) {
+  if (size < HEADER_SIZE || memcmp(bytes, "BC04", 4) != 0) {
     this->error = "not a behaviour program";
     return false;
   }
@@ -90,11 +90,11 @@ bool vm_load(vm *this, const uint8_t *bytes, size_t size, int32_t *slots,
   uint16_t compiled_slots = read_u16(bytes + 4);
   uint32_t code_size = read_u32(bytes + 24);
 
-  if (compiled_slots != slot_count) {
+  if (compiled_slots != slot_count || read_u32(bytes + 28) != fingerprint) {
     this->error = "behaviour was compiled for a different slot layout";
     return false;
   }
-  if (size < HEADER_SIZE + code_size) {
+  if (code_size > size - HEADER_SIZE) {
     this->error = "behaviour program is truncated";
     return false;
   }
