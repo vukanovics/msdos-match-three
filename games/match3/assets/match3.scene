@@ -39,8 +39,7 @@ sheet ui UI.SPR 2
 # handle N + 6, so it can tell them apart with a single comparison and recover a
 # gem's kind with arithmetic on the handle.
 #
-# The art is 60 frames per second and every second frame is kept, so holding a
-# cel for four ticks plays a run at half its authored speed.
+# Both runs animate the jewel over a fixed, unlit mount.
 animatedsprite glimmer0 blue 0 60 4
 animatedsprite glimmer1 cyan 0 60 4
 animatedsprite glimmer2 green 0 60 4
@@ -72,7 +71,8 @@ particles.vx -36 36
 particles.vy -24 32
 # Downward acceleration in 1/256 pixel per tick squared.
 particles.gravity 56
-particles.colour 0 255
+# The upper palette indices are reserved for the board and cursor.
+particles.colour 0 252
 particles.size 2 5
 particles.lifetime 15 27
 
